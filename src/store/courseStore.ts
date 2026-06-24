@@ -53,6 +53,8 @@ export interface CourseItem {
     subscription_status: 'active' | 'expired' | null;
     created_at?: string | null;
   };
+  rating?: number;
+  reviewsCount?: number;
 }
 
 interface ChapterProgress {
@@ -168,16 +170,35 @@ export const useCourseStore = create<CourseState>((set, get) => ({
         .eq('is_published', true)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        throw new Error(error.message);
+      // Fetch reviews if table exists
+      let reviewStats: Record<string, { total: number; count: number }> = {};
+      try {
+        const { data: reviewsData } = await supabase
+          .from('course_reviews')
+          .select('course_id, rating');
+        if (reviewsData) {
+          reviewsData.forEach((r: any) => {
+            if (!reviewStats[r.course_id]) {
+              reviewStats[r.course_id] = { total: 0, count: 0 };
+            }
+            reviewStats[r.course_id].total += r.rating;
+            reviewStats[r.course_id].count += 1;
+          });
+        }
+      } catch (err) {
+        console.warn('Could not load course reviews:', err);
       }
 
       const list: CourseItem[] = Array.isArray(data)
-        ? data.map((item: any) => ({
-          ...item,
-          teacher: Array.isArray(item.teacher) ? item.teacher[0] : item.teacher,
-          // admin is not in CourseItem interface but fetched in query, maybe unused or should be mapped too if added later
-        }))
+        ? data.map((item: any) => {
+          const stats = reviewStats[item.id] || { total: 0, count: 0 };
+          return {
+            ...item,
+            teacher: Array.isArray(item.teacher) ? item.teacher[0] : item.teacher,
+            rating: stats.count > 0 ? Number((stats.total / stats.count).toFixed(1)) : 4.5,
+            reviewsCount: stats.count
+          };
+        })
         : [];
       set({ courses: list, loading: false, error: null });
     } catch (e: any) {
@@ -229,6 +250,25 @@ export const useCourseStore = create<CourseState>((set, get) => ({
         throw new Error(error.message);
       }
 
+      // Fetch reviews if table exists
+      let reviewStats: Record<string, { total: number; count: number }> = {};
+      try {
+        const { data: reviewsData } = await supabase
+          .from('course_reviews')
+          .select('course_id, rating');
+        if (reviewsData) {
+          reviewsData.forEach((r: any) => {
+            if (!reviewStats[r.course_id]) {
+              reviewStats[r.course_id] = { total: 0, count: 0 };
+            }
+            reviewStats[r.course_id].total += r.rating;
+            reviewStats[r.course_id].count += 1;
+          });
+        }
+      } catch (err) {
+        console.warn('Could not load course reviews:', err);
+      }
+
       const courses: CourseItem[] = [];
       if (Array.isArray(data)) {
         for (const row of data as any[]) {
@@ -236,6 +276,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
             // Check if expired
             const isExpired = row.expiry_date && new Date(row.expiry_date) < new Date();
             const status = isExpired ? 'expired' : (row.subscription_status || 'active');
+            const stats = reviewStats[row.course.id] || { total: 0, count: 0 };
 
             courses.push({
               ...row.course,
@@ -243,7 +284,9 @@ export const useCourseStore = create<CourseState>((set, get) => ({
                 expiry_date: row.expiry_date,
                 subscription_status: status,
                 created_at: row.created_at
-              }
+              },
+              rating: stats.count > 0 ? Number((stats.total / stats.count).toFixed(1)) : 4.5,
+              reviewsCount: stats.count
             } as CourseItem);
           }
         }

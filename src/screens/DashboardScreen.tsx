@@ -131,10 +131,16 @@ export default function DashboardScreen() {
       const { data } = await supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(4);
-      if (data) setNotifications(data);
+        .order('created_at', { ascending: false });
+
+      if (data) {
+        const enrolledIds = new Set(myCourses.map(c => c.id));
+        const filtered = data.filter((n: any) =>
+          (!n.user_id || n.user_id === user.id) &&
+          (!n.course_id || n.type === 'offer' || n.type === 'general' || n.type === 'system' || n.type === 'user' || enrolledIds.has(n.course_id))
+        );
+        setNotifications(filtered.slice(0, 4));
+      }
     } catch (e) { console.error('Notifications fetch error:', e); }
   };
 
@@ -152,39 +158,64 @@ export default function DashboardScreen() {
   };
 
   const checkAndUpdateStreak = async () => {
-    if (!user) return;
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
     try {
-      const streakKey = `user_streak_${user.id}`;
-      const storedStreak = localStorage.getItem(streakKey);
+      const { data, error } = await supabase
+        .from('users')
+        .select('streak_count, streak_last_date')
+        .eq('id', currentUser.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
       const today = new Date().toISOString().split('T')[0];
       const yesterdayDate = new Date(); yesterdayDate.setDate(yesterdayDate.getDate() - 1);
       const yesterday = yesterdayDate.toISOString().split('T')[0];
-      if (storedStreak) {
-        const { count, lastDate } = JSON.parse(storedStreak);
-        if (lastDate === today) { setStreakCount(count); return; }
-        if (lastDate === yesterday) {
-          const newCount = count + 1;
-          setStreakCount(newCount);
-          localStorage.setItem(streakKey, JSON.stringify({ count: newCount, lastDate: today }));
-        } else {
-          setStreakCount(1);
-          localStorage.setItem(streakKey, JSON.stringify({ count: 1, lastDate: today }));
+
+      let newCount = 1;
+      let lastDate = data?.streak_last_date;
+      let currentCount = data?.streak_count || 0;
+
+      if (lastDate === today) {
+        const finalCount = currentCount || 1;
+        setStreakCount(finalCount);
+        if (currentUser.streak_count !== finalCount) {
+          useAuthStore.getState().updateProfile({ streak_count: finalCount });
         }
-      } else {
-        setStreakCount(1);
-        localStorage.setItem(streakKey, JSON.stringify({ count: 1, lastDate: today }));
+        return;
       }
-    } catch (e) { console.error('Error updating streak:', e); }
+
+      if (lastDate === yesterday) {
+        newCount = currentCount + 1;
+      } else {
+        newCount = 1;
+      }
+
+      setStreakCount(newCount);
+      if (currentUser.streak_count !== newCount) {
+        useAuthStore.getState().updateProfile({ streak_count: newCount });
+      }
+
+      await supabase
+        .from('users')
+        .update({
+          streak_count: newCount,
+          streak_last_date: today
+        })
+        .eq('id', currentUser.id);
+    } catch (e) { console.error('Error updating streak in DB:', e); }
   };
 
   const fetchDashboardStats = async () => {
-    if (!user) return;
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
     try {
-      const { data: stats } = await supabase.rpc('get_student_analytics', { student_id: user.id });
+      const { data: stats } = await supabase.rpc('get_student_analytics', { student_id: currentUser.id });
       const { data: recentData } = await supabase
         .from('chapter_progress')
         .select('updated_at, is_completed, courses(title), chapters(title)')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUser.id)
         .order('updated_at', { ascending: false })
         .limit(3);
       setAnalyticsData({
@@ -200,15 +231,16 @@ export default function DashboardScreen() {
   };
 
   const loadData = useCallback(async () => {
-    if (user) {
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser) {
       await Promise.all([
-        loadMyCourses(user), loadPublishedCourses(), fetchLiveChapters(),
-        fetchDashboardStats(), checkAndUpdateStreak(), fetchNotifications()
+        loadMyCourses(currentUser), loadPublishedCourses(), fetchLiveChapters(),
+        fetchDashboardStats(), checkAndUpdateStreak()
       ]);
     } else {
       await Promise.all([loadPublishedCourses(), fetchLiveChapters()]);
     }
-  }, [user, loadMyCourses, loadPublishedCourses]);
+  }, [user?.id, loadMyCourses, loadPublishedCourses]);
 
   const initDashboard = useCallback(async () => {
     setLoadingError(null);
@@ -232,6 +264,36 @@ export default function DashboardScreen() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // Fetch notifications when myCourses updates to ensure proper course filters
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+    }
+  }, [user, myCourses]);
+
+  // Realtime notification subscriptions on dashboard
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('public:notifications:dashboard')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const newNotif = payload.new as any;
+          const enrolledIds = new Set(myCourses.map(c => c.id));
+          if (newNotif.user_id && newNotif.user_id !== user.id) return;
+
+          if (!newNotif.course_id || newNotif.type === 'offer' || newNotif.type === 'general' || newNotif.type === 'system' || newNotif.type === 'user' || enrolledIds.has(newNotif.course_id)) {
+            setNotifications(prev => [newNotif, ...prev].slice(0, 4));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [myCourses, user]);
 
   const getGreeting = () => {
     const h = new Date().getHours();
@@ -338,11 +400,6 @@ export default function DashboardScreen() {
         display: 'flex', alignItems: 'center', gap: 12,
         boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
       }}>
-        {/* Logo */}
-        <img src="/logo.png" alt="EduOrbit" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        <span style={{ fontSize: 16, fontWeight: 800, color: textPrimary, letterSpacing: '-0.3px', flexShrink: 0 }}>EduOrbit</span>
-
         {/* Search bar */}
         <button
           onClick={() => setIsSearchExpanded(true)}
@@ -828,6 +885,15 @@ export default function DashboardScreen() {
                           <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: '0 0 4px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {course.title}
                           </p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, marginBottom: 4 }}>
+                            <Star size={11} className="text-amber-500" fill="#f59e0b" style={{ color: '#f59e0b' }} />
+                            <span style={{ fontSize: 11, fontWeight: 'bold', color: isDarkMode ? '#f59e0b' : '#d97706' }}>
+                              {course.rating ? course.rating.toFixed(1) : '4.5'}
+                            </span>
+                            <span style={{ fontSize: 10, color: textMuted }}>
+                              ({course.reviewsCount || 0})
+                            </span>
+                          </div>
                           <p style={{ fontSize: 11, color: textMuted, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {course.instructor_name || course.teacher?.name || 'Instructor'}
                           </p>
@@ -1011,6 +1077,15 @@ function CourseCard({ course, myCourses, navigate, currencyFormater, isDarkMode 
       </div>
       <div className="flex flex-col flex-1 p-4 gap-2">
         <h4 className={`text-sm font-bold leading-5 line-clamp-2 m-0 ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{course.title}</h4>
+        <div className="flex items-center gap-1 mt-1">
+          <Star size={13} className="text-amber-500" fill="#f59e0b" style={{ color: '#f59e0b' }} />
+          <span className="text-xs font-bold text-amber-500">
+            {course.rating ? course.rating.toFixed(1) : '4.5'}
+          </span>
+          <span className={`text-[10px] ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            ({course.reviewsCount || 0} reviews)
+          </span>
+        </div>
         <p className={`text-xs line-clamp-2 m-0 flex-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
           {course.description ? stripMarkdown(course.description).slice(0, 100) : ''}
         </p>

@@ -17,6 +17,7 @@ export interface AppUser {
   bio?: string | null;
   class_name?: string | null;
   profession?: string | null;
+  streak_count?: number;
 }
 
 interface AuthState {
@@ -42,7 +43,7 @@ interface AuthState {
 async function fetchUserProfile(userId: string): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, email, role, profile_image, phone, address, bio, class_name')
+    .select('id, name, email, role, profile_image, phone, address, bio, class_name, streak_count')
     .eq('id', userId)
     .maybeSingle();
 
@@ -65,6 +66,7 @@ async function fetchUserProfile(userId: string): Promise<AppUser | null> {
     address: data.address ?? null,
     bio: data.bio ?? null,
     class_name: data.class_name ?? null,
+    streak_count: data.streak_count ?? 1,
   };
 }
 
@@ -97,6 +99,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         address: profile?.address ?? session.user.user_metadata?.address ?? null,
         bio: profile?.bio ?? session.user.user_metadata?.bio ?? null,
         class_name: profile?.class_name ?? session.user.user_metadata?.class_name ?? null,
+        streak_count: profile?.streak_count ?? session.user.user_metadata?.streak_count ?? 1,
         user_metadata: session.user.user_metadata
       };
 
@@ -132,6 +135,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         address: profile?.address ?? sessionUser.user_metadata?.address ?? null,
         bio: profile?.bio ?? sessionUser.user_metadata?.bio ?? null,
         class_name: profile?.class_name ?? sessionUser.user_metadata?.class_name ?? null,
+        streak_count: profile?.streak_count ?? sessionUser.user_metadata?.streak_count ?? 1,
         user_metadata: sessionUser.user_metadata
       };
 
@@ -192,6 +196,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         address: profile?.address ?? sessionUser.user_metadata?.address ?? null,
         bio: profile?.bio ?? sessionUser.user_metadata?.bio ?? null,
         class_name: profile?.class_name ?? sessionUser.user_metadata?.class_name ?? null,
+        streak_count: profile?.streak_count ?? sessionUser.user_metadata?.streak_count ?? 1,
         user_metadata: sessionUser.user_metadata
       };
 

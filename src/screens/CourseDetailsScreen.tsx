@@ -29,6 +29,131 @@ export default function CourseDetailsScreen() {
     const [isExpired, setIsExpired] = useState(false);
     const [expiryInfo, setExpiryInfo] = useState('');
 
+    const [reviews, setReviews] = useState<any[]>([]);
+    const [hasReviewed, setHasReviewed] = useState(false);
+    const [submittingReview, setSubmittingReview] = useState(false);
+    const [userRating, setUserRating] = useState(5);
+    const [userComment, setUserComment] = useState('');
+    const [loadingReviews, setLoadingReviews] = useState(false);
+
+    const fetchReviews = async () => {
+        if (!course) return;
+        setLoadingReviews(true);
+        try {
+            const { data, error } = await supabase
+                .from('course_reviews')
+                .select('*, user:users(name, profile_image)')
+                .eq('course_id', course.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            if (data) {
+                setReviews(data);
+                if (user) {
+                    const found = data.some((r: any) => r.user_id === user.id);
+                    setHasReviewed(found);
+                }
+            }
+        } catch (e) {
+            console.warn('Error fetching course reviews:', e);
+        } finally {
+            setLoadingReviews(false);
+        }
+    };
+
+    const handleSubmitReview = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user) {
+            alert('You must be logged in to submit a review.');
+            return;
+        }
+        if (!isEnrolled) {
+            alert('You must be enrolled in the course to write a review.');
+            return;
+        }
+        if (hasReviewed) {
+            alert('You have already reviewed this course.');
+            return;
+        }
+
+        setSubmittingReview(true);
+        try {
+            const { error } = await supabase
+                .from('course_reviews')
+                .insert({
+                    course_id: course.id,
+                    user_id: user.id,
+                    rating: userRating,
+                    comment: userComment.trim()
+                });
+
+            if (error) throw error;
+
+            alert('Thank you for your review!');
+            setUserComment('');
+            setUserRating(5);
+            
+            await fetchReviews();
+            
+            // Recalculate average rating locally
+            const { data: allReviews } = await supabase
+                .from('course_reviews')
+                .select('rating')
+                .eq('course_id', course.id);
+                
+            if (allReviews) {
+                const total = allReviews.reduce((sum, r) => sum + r.rating, 0);
+                const avg = allReviews.length > 0 ? Number((total / allReviews.length).toFixed(1)) : 4.5;
+                setCourse((prev: any) => ({
+                    ...prev,
+                    rating: avg,
+                    reviewsCount: allReviews.length
+                }));
+            }
+        } catch (e: any) {
+            console.error('Error submitting review:', e);
+            alert(e.message || 'Failed to submit review.');
+        } finally {
+            setSubmittingReview(false);
+        }
+    };
+
+    const renderInteractiveStars = () => {
+        return (
+            <div className="flex flex-row gap-1.5 my-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                        key={star}
+                        type="button"
+                        onClick={() => setUserRating(star)}
+                        className="bg-transparent border-none cursor-pointer p-0"
+                    >
+                        <Star
+                            size={28}
+                            className={star <= userRating ? 'text-amber-500 fill-amber-500' : 'text-gray-300 dark:text-gray-600'}
+                            fill={star <= userRating ? '#f59e0b' : 'none'}
+                        />
+                    </button>
+                ))}
+            </div>
+        );
+    };
+
+    const renderStars = (ratingVal: number) => {
+        return (
+            <div className="flex flex-row gap-0.5">
+                {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                        key={star}
+                        size={14}
+                        className={star <= ratingVal ? 'text-amber-500 fill-amber-500' : 'text-gray-300 dark:text-gray-600'}
+                        fill={star <= ratingVal ? '#f59e0b' : 'none'}
+                    />
+                ))}
+            </div>
+        );
+    };
+
     useEffect(() => {
         if (!course) {
             navigate(-1);
@@ -82,7 +207,7 @@ export default function CourseDetailsScreen() {
                         ...data,
                         teacher: Array.isArray(data.teacher) ? data.teacher[0] : data.teacher
                     };
-                    setCourse(normalized);
+                    setCourse((prev: any) => ({ ...prev, ...normalized }));
                 }
             } catch (error) {
                 console.error('Error fetching course details:', error);
@@ -92,12 +217,13 @@ export default function CourseDetailsScreen() {
         };
 
         fetchCourseDetails();
+        fetchReviews();
         if (user) {
             checkEnrollment();
         } else {
             setLoading(false);
         }
-    }, [user]);
+    }, [user, course?.id]);
 
     const checkEnrollment = async () => {
         try {
@@ -191,8 +317,8 @@ export default function CourseDetailsScreen() {
     const totalSeconds = (course.chapters || []).reduce((sum: number, ch: any) => sum + (ch.duration || 0), 0);
     const duration = formatDuration(totalSeconds);
     const enrolledStudents = parseInt(course.purchases_count?.toString() || course.enrollments_count?.toString() || '0', 10);
-    const rating = 4.8;
-    const reviewsCount = 124;
+    const rating = course.rating || 4.5;
+    const reviewsCount = course.reviewsCount || 0;
 
     const completedCount = isEnrolled ? (progress[course.id]?.length || 0) : 0;
     const progressPercentage = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
@@ -317,7 +443,7 @@ export default function CourseDetailsScreen() {
                 {/* Left Column - Main Tabs Details */}
                 <div className="flex-1 min-w-0 flex flex-col">
                     <div className="flex flex-row border-b mb-6" style={{ borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
-                        {['About', 'Lessons', 'Attachments', 'Live'].map((tab) => (
+                        {['About', 'Lessons', 'Attachments', 'Live', 'Reviews'].map((tab) => (
                             <button
                                 key={tab}
                                 className={`flex-1 py-3 border-b-2 cursor-pointer transition-colors bg-transparent border-none ${activeTab === tab ? 'border-primary' : 'border-transparent'}`}
@@ -534,6 +660,98 @@ export default function CourseDetailsScreen() {
                                         <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>No live sessions scheduled.</span>
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {activeTab === 'Reviews' && (
+                            <div className="flex flex-col gap-6">
+                                <span className={`text-lg font-extrabold mb-1 ${isDarkMode ? 'text-gray-50' : 'text-gray-800'}`}>
+                                    Course Reviews
+                                </span>
+
+                                {/* Submit review form */}
+                                {isEnrolled && !isExpired && !hasReviewed && (
+                                    <form onSubmit={handleSubmitReview} className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-gray-800/40 border-gray-700' : 'bg-white border-gray-100 shadow-sm'} mb-4`}>
+                                        <h4 className={`text-sm font-bold m-0 mb-1.5 ${isDarkMode ? 'text-gray-100' : 'text-gray-850'}`}>Write a Review</h4>
+                                        <p className="text-xs text-textLight mt-0 mb-3">Share your learning experience and feedback with other students.</p>
+                                        
+                                        <div className="mb-3">
+                                            <span className="text-xs font-semibold text-textLight block mb-1">Your Rating:</span>
+                                            {renderInteractiveStars()}
+                                        </div>
+
+                                        <div className="mb-4">
+                                            <span className="text-xs font-semibold text-textLight block mb-1">Comment:</span>
+                                            <textarea
+                                                value={userComment}
+                                                onChange={(e) => setUserComment(e.target.value)}
+                                                placeholder="Write your review here..."
+                                                rows={3}
+                                                required
+                                                className={`w-full p-3 rounded-xl border outline-none text-sm transition-all focus:border-primary ${isDarkMode ? 'bg-gray-900 border-gray-800 text-white' : 'bg-slate-50 border-gray-200 text-gray-800'}`}
+                                            />
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            disabled={submittingReview}
+                                            className="px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-bold uppercase tracking-wider text-center cursor-pointer hover:bg-primary/95 transition-colors border-none disabled:opacity-50"
+                                        >
+                                            {submittingReview ? 'Submitting...' : 'Submit Review'}
+                                        </button>
+                                    </form>
+                                )}
+
+                                {hasReviewed && (
+                                    <div className={`p-4 rounded-xl border border-dashed text-center text-xs text-textLight ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+                                        You have already submitted a review for this course. Thank you!
+                                    </div>
+                                )}
+
+                                {/* Reviews List */}
+                                <div className="flex flex-col gap-4">
+                                    {loadingReviews ? (
+                                        <div className="flex justify-center items-center py-8">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                                        </div>
+                                    ) : reviews.length > 0 ? (
+                                        reviews.map((rev) => (
+                                            <div
+                                                key={rev.id}
+                                                className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all duration-300 ${isDarkMode ? 'bg-gray-800/20 border-gray-700/60' : 'bg-white border-gray-100 shadow-sm'}`}
+                                            >
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <img
+                                                            src={rev.user?.profile_image || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(rev.user?.name || 'Student') + '&background=random'}
+                                                            alt={rev.user?.name || 'Student'}
+                                                            className="w-9 h-9 rounded-full object-cover"
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span className={`text-xs font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-855'}`}>
+                                                                {rev.user?.name || 'Student'}
+                                                            </span>
+                                                            <span className="text-[10px] text-textLight mt-0.5">
+                                                                {new Date(rev.created_at).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    {renderStars(rev.rating)}
+                                                </div>
+                                                <p className={`text-xs leading-relaxed m-0 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                                    {rev.comment}
+                                                </p>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="py-12 flex flex-col justify-center items-center border border-dashed rounded-2xl border-border">
+                                            <Star size={36} className="text-textLight opacity-40 mb-2" />
+                                            <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                No reviews yet. Be the first to review!
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>

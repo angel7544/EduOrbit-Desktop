@@ -84,7 +84,9 @@ export const Header: React.FC<HeaderProps> = ({
         {showStreak && (
           <div className="flex flex-row items-center gap-1.5 bg-orange-100 dark:bg-orange-900/30 px-2.5 py-1 rounded-full border border-orange-200 dark:border-orange-800/50 mr-1 shadow-sm">
             <Flame size={16} className="text-orange-500 dark:text-orange-400" />
-            <span className="text-sm font-bold text-orange-600 dark:text-orange-400 m-0">12</span>
+            <span className="text-sm font-bold text-orange-600 dark:text-orange-400 m-0">
+              {user?.streak_count || 1}
+            </span>
           </div>
         )}
 
