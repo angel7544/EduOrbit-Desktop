@@ -153,7 +153,7 @@ export default function PurchaseScreen() {
     if (!user) return;
     setIsCreatingOrder(true);
     try {
-        const response = await fetch('/api/razorpay/order', {
+        const response = await fetch(`${API_URL}razorpay/order`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -217,7 +217,7 @@ export default function PurchaseScreen() {
     try {
       if (!user) return;
 
-      const response = await fetch('/api/razorpay/verify', {
+      const response = await fetch(`${API_URL}razorpay/verify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
