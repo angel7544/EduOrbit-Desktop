@@ -16,6 +16,7 @@ export interface AppUser {
   address?: string | null;
   bio?: string | null;
   class_name?: string | null;
+  profession?: string | null;
 }
 
 interface AuthState {

@@ -67,7 +67,7 @@ export default function ChapterPlayerScreen() {
             .eq('course_id', courseId)
             .eq('status', 'success')
             .limit(1);
-          setHasAccess(purchases && purchases.length > 0);
+          setHasAccess(!!(purchases && purchases.length > 0));
         } else if (initialHasAccess !== undefined) {
           setHasAccess(initialHasAccess);
         }
