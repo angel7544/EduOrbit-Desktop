@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Search, BookOpen, Star, Calculator, FlaskConical, Layers,
   Bell, Flame, Award, Clock, TrendingUp, Play, CheckCircle2,
-  GraduationCap, X, ChevronRight, Users, Zap, Video
+  GraduationCap, X, ChevronLeft, ChevronRight, Users, Zap, Video
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCourseStore } from '../store/courseStore';
@@ -30,14 +30,28 @@ export default function DashboardScreen() {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [streakCount, setStreakCount] = useState(1);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Random featured courses (changes on each load via useMemo)
-  const featuredCourses = useMemo(() => {
-    const featured = courses.filter(c => c.is_featured);
-    if (featured.length <= 3) return featured;
-    const shuffled = [...featured].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 3);
-  }, [courses]);
+  // Filter featured courses that the user hasn't purchased yet
+  const unpurchasedFeaturedCourses = useMemo(() => {
+    return courses.filter(c => c.is_featured && !myCourses.some(mc => mc.id === c.id));
+  }, [courses, myCourses]);
+
+  // Auto slide the carousel
+  useEffect(() => {
+    if (unpurchasedFeaturedCourses.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % unpurchasedFeaturedCourses.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [unpurchasedFeaturedCourses.length]);
+
+  // Handle slide index bounds validation
+  useEffect(() => {
+    if (currentSlide >= unpurchasedFeaturedCourses.length && unpurchasedFeaturedCourses.length > 0) {
+      setCurrentSlide(0);
+    }
+  }, [unpurchasedFeaturedCourses.length, currentSlide]);
 
   useEffect(() => {
     if (user && myCourses.length > 0) {
@@ -262,6 +276,11 @@ export default function DashboardScreen() {
   const activeProgress = activeCourse
     ? (activeCourse.chapters?.length ? Math.round(((progress?.[activeCourse.id]?.length || 0) / activeCourse.chapters.length) * 100) : 0)
     : 0;
+
+  // Calculate combined course progress
+  const totalChapters = myCourses.reduce((sum, c) => sum + (c.chapters?.length || 0), 0);
+  const completedChapters = myCourses.reduce((sum, c) => sum + (progress[c.id]?.length || 0), 0);
+  const combinedProgress = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
   return (
     <div style={{ minHeight: '100vh', background: bg }}>
@@ -513,6 +532,49 @@ export default function DashboardScreen() {
             </div>
           )}
 
+          {/* ── Combined Progress ── */}
+          {myCourses.length > 0 && (
+            <div style={{
+              background: `linear-gradient(135deg, ${isDarkMode ? '#1e1b4b' : '#e0e7ff'}, ${isDarkMode ? '#0f172a' : '#ffffff'})`,
+              border: `1px solid ${isDarkMode ? '#312e81' : '#c7d2fe'}`,
+              borderRadius: 20,
+              padding: '20px 24px',
+              marginBottom: 28,
+              boxShadow: '0 4px 20px rgba(99, 102, 241, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 20
+            }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: 14,
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                flexShrink: 0
+              }}>
+                <TrendingUp size={22} color="#fff" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <h4 style={{ fontSize: 15, fontWeight: 800, color: textPrimary, margin: 0 }}>Overall Learning Progress</h4>
+                  <span style={{ fontSize: 16, fontWeight: 900, color: '#6366f1' }}>{combinedProgress}%</span>
+                </div>
+                <p style={{ fontSize: 12, color: textMuted, margin: '0 0 12px' }}>
+                  You have completed <strong>{completedChapters}</strong> out of <strong>{totalChapters}</strong> chapters across all your <strong>{myCourses.length}</strong> enrolled courses.
+                </p>
+                <div style={{ height: 8, background: isDarkMode ? '#1e293b' : '#e2e8f0', borderRadius: 99, overflow: 'hidden', position: 'relative' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${combinedProgress}%`,
+                    background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                    borderRadius: 99,
+                    transition: 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
+                  }} />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Course Categories ── */}
           <div style={{ marginBottom: 28 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -557,7 +619,7 @@ export default function DashboardScreen() {
                 </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-                {courses.filter(c => c.is_featured).slice(0, 6).map(course => (
+                {courses.filter(c => c.is_featured).slice(0, 3).map(course => (
                   <CourseCard key={course.id} course={course} myCourses={myCourses} navigate={navigate} currencyFormater={currencyFormater} isDarkMode={isDarkMode} />
                 ))}
               </div>
@@ -573,6 +635,260 @@ export default function DashboardScreen() {
           position: 'sticky', top: 57, height: 'calc(100vh - 57px)', overflowY: 'auto',
           background: isDarkMode ? '#0f172a' : '#fafafa',
         }}>
+
+          {/* ── Upcoming Live Sessions ── */}
+          {liveChapters.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 800, color: textPrimary, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Video size={16} color="#ef4444" />
+                  Upcoming Live
+                </h3>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {liveChapters.map((ch: any) => {
+                  const isCurrentlyLive = ch.live_status === 'LIVE';
+                  const formattedTime = ch.live_starts_at
+                    ? new Date(ch.live_starts_at).toLocaleString('en-IN', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })
+                    : 'Scheduled';
+
+                  return (
+                    <div
+                      key={ch.id}
+                      onClick={() => navigate('/coursedetails', { state: { course: ch.courses } })}
+                      style={{
+                        background: cardBg,
+                        border: `1px solid ${isCurrentlyLive ? '#ef4444' : border}`,
+                        borderRadius: 14,
+                        padding: '12px 14px',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
+                    >
+                      <style>{`
+                        @keyframes pulse-live {
+                          0% { opacity: 0.5; }
+                          50% { opacity: 1; }
+                          100% { opacity: 0.5; }
+                        }
+                      `}</style>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        {isCurrentlyLive ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{
+                              width: 8, height: 8, borderRadius: '50%',
+                              backgroundColor: '#ef4444',
+                              display: 'inline-block',
+                              animation: 'pulse-live 1.5s infinite'
+                            }} />
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#ef4444', letterSpacing: '0.5px' }}>LIVE NOW</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.5px' }}>UPCOMING</span>
+                        )}
+                        <span style={{ fontSize: 10, color: textMuted }}>{formattedTime}</span>
+                      </div>
+                      
+                      <p style={{ fontSize: 12, fontWeight: 700, color: textPrimary, margin: '0 0 2px', lineHeight: 1.4 }}>
+                        {ch.title}
+                      </p>
+                      <p style={{ fontSize: 11, color: textMuted, margin: '0 0 8px' }}>
+                        Course: {ch.courses?.title || 'Course'}
+                      </p>
+
+                      <button
+                        onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course: ch.courses } }); }}
+                        style={{
+                          width: '100%', padding: '6px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                          background: isCurrentlyLive ? '#ef4444' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                          color: '#fff', fontSize: 11, fontWeight: 700,
+                        }}>
+                        {isCurrentlyLive ? 'Join Live Class' : 'View Course'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Featured Picks Carousel ── */}
+          {unpurchasedFeaturedCourses.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 800, color: textPrimary, margin: 0 }}>
+                  ✨ Featured Picks
+                </h3>
+                <button onClick={() => navigate('/courses')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#6366f1' }}>See All</button>
+              </div>
+
+              <div style={{ position: 'relative', height: 260, borderRadius: 16, overflow: 'hidden' }}>
+                {unpurchasedFeaturedCourses.map((course, idx) => {
+                  const isCurrent = idx === currentSlide;
+                  return (
+                    <div
+                      key={course.id}
+                      onClick={() => navigate('/coursedetails', { state: { course } })}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        opacity: isCurrent ? 1 : 0,
+                        transform: isCurrent ? 'scale(1)' : 'scale(0.96)',
+                        transition: 'opacity 0.5s ease-in-out, transform 0.5s ease-in-out',
+                        pointerEvents: isCurrent ? 'auto' : 'none',
+                        background: cardBg,
+                        border: `1px solid ${border}`,
+                        borderRadius: 16,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {/* Image header */}
+                      <div style={{ position: 'relative', height: 120 }}>
+                        <img
+                          src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80'}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.4), transparent)' }} />
+                        <div style={{
+                          position: 'absolute', top: 8, left: 8,
+                          background: 'rgba(0,0,0,0.65)', borderRadius: 6,
+                          padding: '3px 8px', backdropFilter: 'blur(4px)',
+                        }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>
+                            {course.price ? `₹${currencyFormater(Number(course.price))}` : 'Free'}
+                          </span>
+                        </div>
+                        {course.is_featured && (
+                          <div style={{ position: 'absolute', top: 8, right: 8, background: '#f59e0b', borderRadius: 6, padding: '2px 6px' }}>
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#fff' }}>★ FEATURED</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Content */}
+                      <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: '0 0 4px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {course.title}
+                          </p>
+                          <p style={{ fontSize: 11, color: textMuted, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {course.instructor_name || course.teacher?.name || 'Instructor'}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Users size={11} color={textMuted} />
+                            <span style={{ fontSize: 11, color: textMuted }}>{course.purchases_count || 0} enrolled</span>
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course } }); }}
+                            style={{
+                              padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                              color: '#fff',
+                            }}
+                          >
+                            {course.price ? 'Buy Now' : 'Enroll'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Left/Right manual slide buttons */}
+                {unpurchasedFeaturedCourses.length > 1 && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentSlide(prev => (prev - 1 + unpurchasedFeaturedCourses.length) % unpurchasedFeaturedCourses.length);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: 8,
+                        top: '25%',
+                        transform: 'translateY(-50%)',
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#fff',
+                        zIndex: 10
+                      }}
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentSlide(prev => (prev + 1) % unpurchasedFeaturedCourses.length);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: '25%',
+                        transform: 'translateY(-50%)',
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#fff',
+                        zIndex: 10
+                      }}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Dots Indicator */}
+              {unpurchasedFeaturedCourses.length > 1 && (
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 12 }}>
+                  {unpurchasedFeaturedCourses.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentSlide(idx)}
+                      style={{
+                        width: idx === currentSlide ? 16 : 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: idx === currentSlide ? '#6366f1' : textMuted,
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Notifications ── */}
           <div style={{ marginBottom: 24 }}>
@@ -618,98 +934,6 @@ export default function DashboardScreen() {
                 ))
               )}
             </div>
-          </div>
-
-          {/* ── Featured Course Cards (Random, bottom-right) ── */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: textPrimary, margin: 0 }}>
-                ✨ Featured Picks
-              </h3>
-              <button onClick={() => navigate('/courses')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#6366f1' }}>See All</button>
-            </div>
-
-            {featuredCourses.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {featuredCourses.map(course => {
-                  const isEnrolled = myCourses.some(c => c.id === course.id);
-                  const enrolledCourse = myCourses.find(c => c.id === course.id);
-                  const isExpired = enrolledCourse?.enrollment?.expiry_date
-                    ? new Date(enrolledCourse.enrollment.expiry_date) < new Date()
-                    : false;
-                  return (
-                    <div
-                      key={course.id}
-                      onClick={() => navigate('/coursedetails', { state: { course } })}
-                      style={{
-                        background: cardBg, border: `1px solid ${border}`,
-                        borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
-                        transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.1)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; }}
-                    >
-                      {/* Thumbnail */}
-                      <div style={{ position: 'relative', height: 120 }}>
-                        <img src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80'} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.4), transparent)' }} />
-                        <div style={{
-                          position: 'absolute', top: 8, left: 8,
-                          background: 'rgba(0,0,0,0.65)', borderRadius: 6,
-                          padding: '3px 8px', backdropFilter: 'blur(4px)',
-                        }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>
-                            {course.price ? `₹${currencyFormater(Number(course.price))}` : 'Free'}
-                          </span>
-                        </div>
-                        {isEnrolled && (
-                          <div style={{
-                            position: 'absolute', bottom: 8, left: 8,
-                            background: isExpired ? '#ef4444' : '#10b981',
-                            borderRadius: 6, padding: '2px 7px',
-                          }}>
-                            <span style={{ fontSize: 9, fontWeight: 700, color: '#fff' }}>{isExpired ? 'EXPIRED' : 'ENROLLED'}</span>
-                          </div>
-                        )}
-                        {course.is_featured && (
-                          <div style={{ position: 'absolute', top: 8, right: 8, background: '#f59e0b', borderRadius: 6, padding: '2px 6px' }}>
-                            <span style={{ fontSize: 9, fontWeight: 800, color: '#fff' }}>★ FEATURED</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Info */}
-                      <div style={{ padding: '12px 14px' }}>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: '0 0 3px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' as any }}>
-                          {course.title}
-                        </p>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Users size={11} color={textMuted} />
-                            <span style={{ fontSize: 11, color: textMuted }}>{course.purchases_count || 0} enrolled</span>
-                          </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course } }); }}
-                            style={{
-                              padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                              background: isEnrolled ? (isExpired ? '#ef4444' : '#10b981') : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                              color: '#fff',
-                            }}
-                          >
-                            {isEnrolled ? (isExpired ? 'Renew' : 'Continue') : (course.price ? 'Buy Now' : 'Enroll')}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '24px 0', background: cardBg, borderRadius: 16, border: `1px solid ${border}` }}>
-                <Zap size={28} color={textMuted} style={{ margin: '0 auto 8px' }} />
-                <p style={{ fontSize: 13, color: textMuted, margin: 0 }}>No featured courses yet</p>
-              </div>
-            )}
           </div>
         </div>
       </div>
