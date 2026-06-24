@@ -23,6 +23,7 @@ export interface AppUser {
 interface AuthState {
   user: AppUser | null;
   loading: boolean;
+  isInitialized: boolean;
   error: string | null;
   initialize: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -73,6 +74,7 @@ async function fetchUserProfile(userId: string): Promise<AppUser | null> {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: false,
+  isInitialized: false,
   error: null,
   initialize: async () => {
     set({ loading: true, error: null });
@@ -83,7 +85,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } = await supabase.auth.getSession();
 
       if (error || !session?.user) {
-        set({ user: null, loading: false, error: null });
+        set({ user: null, loading: false, isInitialized: true, error: null });
         return;
       }
 
@@ -103,11 +105,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         user_metadata: session.user.user_metadata
       };
 
-      set({ user: appUser, loading: false, error: null });
+      set({ user: appUser, loading: false, isInitialized: true, error: null });
     } catch (e: any) {
       const message =
         typeof e?.message === 'string' ? e.message : 'Failed to initialize session';
-      set({ user: null, loading: false, error: message });
+      set({ user: null, loading: false, isInitialized: true, error: message });
     }
   },
   signInWithEmail: async (email, password) => {

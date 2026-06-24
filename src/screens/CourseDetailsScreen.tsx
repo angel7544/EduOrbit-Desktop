@@ -178,9 +178,16 @@ export default function CourseDetailsScreen() {
                         is_featured,
                         video_subject,
                         instructor_name,
+                        instructor_id,
+                        instructors (
+                            name,
+                            profile_image,
+                            bio
+                        ),
                         teacher:users!teacher_id (
                             name,
-                            profile_image
+                            profile_image,
+                            bio
                         ),
                         chapters (
                             id,
@@ -329,8 +336,12 @@ export default function CourseDetailsScreen() {
     };
 
     // Compile specific tab items
-    const regularChapters = (course.chapters || []).filter((ch: any) => !ch.is_live);
-    const liveChapters = (course.chapters || []).filter((ch: any) => ch.is_live);
+    const regularChapters = (course.chapters || [])
+        .filter((ch: any) => !ch.is_live)
+        .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+    const liveChapters = (course.chapters || [])
+        .filter((ch: any) => ch.is_live)
+        .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
     const allAttachments = (course.chapters || []).reduce((acc: any[], chapter: any) => {
         if (Array.isArray(chapter.attachments)) {
             chapter.attachments.forEach((att: any) => {
@@ -423,15 +434,17 @@ export default function CourseDetailsScreen() {
                         {/* Instructor Quick Profile */}
                         <div className="flex items-center pt-4 border-t border-border mt-auto">
                             <img
-                                src={course.teacher?.profile_image || course.teacher_avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(course.teacher?.name || course.instructor_name || 'Instructor') + '&background=random'}
-                                alt={course.teacher?.name || course.instructor_name || 'Instructor'}
-                                className="w-10 h-10 rounded-full mr-3 ring-2 ring-primary/20 object-cover"
+                                src={course.instructors?.profile_image || course.teacher?.profile_image || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(course.instructors?.name || course.teacher?.name || course.instructor_name || 'Instructor') + '&background=random'}
+                                alt={course.instructors?.name || course.teacher?.name || course.instructor_name || 'Instructor'}
+                                className="w-12 h-12 rounded-full mr-4 ring-2 ring-primary/30 object-cover"
                             />
-                            <div className="flex flex-col">
-                                <span className={`text-sm font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-950'}`}>
-                                    {course.teacher?.name || course.instructor_name || 'Instructor'}
+                            <div className="flex flex-col flex-1">
+                                <span className={`text-base font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-950'}`}>
+                                    {course.instructors?.name || course.teacher?.name || course.instructor_name || 'Instructor'}
                                 </span>
-                                <span className={`text-[11px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Course Faculty / Specialist</span>
+                                <span className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} line-clamp-2`}>
+                                    {course.instructors?.bio || course.teacher?.bio || 'Course Faculty / Specialist'}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -489,7 +502,14 @@ export default function CourseDetailsScreen() {
                                                         )}
                                                     </div>
                                                     <div className="flex-1">
-                                                        <span className={`text-sm font-extrabold block leading-tight ${isDarkMode ? 'text-gray-50' : 'text-gray-800'}`}>{chapter.title}</span>
+                                                        <span className={`text-sm font-extrabold block leading-tight ${isDarkMode ? 'text-gray-50' : 'text-gray-800'}`}>
+                                                            {chapter.title}
+                                                            {chapter.is_demo && (
+                                                                <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded ml-2 align-middle">
+                                                                    Preview
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                         <div className="flex flex-row items-center mt-1">
                                                             <span className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Video • {formatDuration(chapter.duration || 0)}</span>
                                                         </div>

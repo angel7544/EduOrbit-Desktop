@@ -190,7 +190,7 @@ export default function CoursesScreen() {
           id: course.id,
           title: course.title,
           instructor: course.instructor_name || course.teacher?.name || 'Instructor',
-          instructorAvatar: course.teacher?.avatar_url || course.teacher_avatar || null,
+          instructorAvatar: course.teacher?.profile_image || course.teacher?.avatar_url || course.teacher_avatar || null,
           duration,
           rating: 4.5,
           image:

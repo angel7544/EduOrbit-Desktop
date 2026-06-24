@@ -36,7 +36,7 @@ import { NotificationManager } from './components/NotificationManager';
 
 export default function App() {
   const { isDarkMode, colors } = useTheme();
-  const { user, initialize } = useAuthStore();
+  const { user, initialize, isInitialized } = useAuthStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -71,7 +71,13 @@ export default function App() {
         transition: 'background-color 0.2s ease, color 0.2s ease',
       }}
     >
-      {user && <NotificationManager />}
+      {!isInitialized ? (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : (
+        <>
+          {user && <NotificationManager />}
       <Routes>
         {!user ? (
           <>
@@ -114,6 +120,8 @@ export default function App() {
           </>
         )}
       </Routes>
+        </>
+      )}
     </div>
   );
 }
