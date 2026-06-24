@@ -20,7 +20,3 @@ export const useThemeStore = create<ThemeState>()(
     }
   )
 );
-export function useTheme(): { colors: any; isDarkMode: any; } {
-  throw new Error('Function not implemented.');
-}
-

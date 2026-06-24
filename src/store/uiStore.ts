@@ -5,14 +5,18 @@ interface UIState {
   isSidebarCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  sidebarWidth: number;
+  setSidebarWidth: (width: number) => void;
 }
 
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
       isSidebarCollapsed: false,
-      toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
-      setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
+      toggleSidebar: () => {},
+      setSidebarCollapsed: (collapsed) => {},
+      sidebarWidth: 260,
+      setSidebarWidth: (width) => set({ sidebarWidth: width }),
     }),
     {
       name: 'ui-storage',

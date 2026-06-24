@@ -14,7 +14,7 @@ export default function MainScreen() {
   const [offerModalVisible, setOfferModalVisible] = useState(false);
   const [currentOffer, setCurrentOffer] = useState<any>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const { isSidebarCollapsed } = useUIStore();
+  const { sidebarWidth } = useUIStore();
 
   useEffect(() => {
     checkOffers();
@@ -56,7 +56,10 @@ export default function MainScreen() {
   return (
     <div className="flex h-screen w-full relative bg-background overflow-hidden">
       <Sidebar />
-      <div className={`flex-1 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'} transition-all duration-300 overflow-y-auto h-screen bg-background`}>
+      <div 
+        style={{ marginLeft: `${sidebarWidth}px` }} 
+        className="flex-1 overflow-y-auto h-screen bg-background"
+      >
         <div className="max-w-7xl mx-auto w-full min-h-screen">
           <Outlet />
         </div>

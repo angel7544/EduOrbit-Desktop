@@ -24,6 +24,7 @@ export default function PurchaseScreen() {
 
   const [loading, setLoading] = useState(true);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [expiryDays, setExpiryDays] = useState<number | null>(null);
 
   const { courseId, courseTitle, price, selectedCouponCode } = route.params || {};
 
@@ -51,14 +52,35 @@ export default function PurchaseScreen() {
     });
   };
 
+  // Helper: format validity text
+  const formatValidity = (days: number | null): string => {
+    if (!days || days === 0) return 'Lifetime Access';
+    if (days < 30) return `${days}-Day Access`;
+    if (days === 30) return '30-Day Access';
+    if (days === 60) return '60-Day Access';
+    if (days === 90) return '3-Month Access';
+    if (days === 180) return '6-Month Access';
+    if (days === 365) return '1-Year Access';
+    return `${days}-Day Access`;
+  };
+
+  const validityNote = (days: number | null): string => {
+    if (!days || days === 0) return '* Lifetime access — no expiry. Learn at your own pace, forever.';
+    return `* Access is valid for ${days} days from the date of purchase. After expiry, re-enrollment is required.`;
+  };
+
   const checkPurchase = async () => {
     if (!user) return;
     try {
       const { data: courseData } = await supabase
         .from('courses')
-        .select('is_enrollment_closed')
+        .select('is_enrollment_closed, expiry_days')
         .eq('id', courseId)
         .single();
+
+      if (courseData?.expiry_days !== undefined) {
+        setExpiryDays(courseData.expiry_days ?? null);
+      }
 
       if (courseData?.is_enrollment_closed) {
         alert('Sorry, enrollment for this course is currently closed.');
@@ -145,8 +167,39 @@ export default function PurchaseScreen() {
   const finalPrice = roundTo2(discountedPrice + platformFee);
   const savings = roundTo2(price - discountedPrice);
 
+  const handleFreeCourseEnrollment = async () => {
+    if (!user) return;
+    setIsCreatingOrder(true);
+    try {
+      const { error } = await supabase.from('purchases').insert({
+        user_id: user.id,
+        course_id: courseId,
+        amount: 0,
+        status: 'success',
+        payment_method: 'free',
+        coupon_code: appliedCoupon ? appliedCoupon.code : null,
+      });
+      if (error) throw error;
+      await loadMyCourses(user);
+      if (window.confirm('🎉 Enrolled successfully! Start Learning?')) {
+        navigate('/coursedetails', { state: { course: { id: courseId, title: courseTitle } }, replace: true });
+      } else {
+        navigate(-1);
+      }
+    } catch (error: any) {
+      console.error('Free enrollment error:', error);
+      alert(error.message || 'Enrollment failed. Please try again.');
+    } finally {
+      setIsCreatingOrder(false);
+    }
+  };
+
   const handleCreateOrder = async () => {
     if (!user) return;
+    // Free course — no payment needed
+    if (finalPrice === 0) {
+      return handleFreeCourseEnrollment();
+    }
     setIsCreatingOrder(true);
     try {
       const response = await fetch(`${API_URL}razorpay/order`, {
@@ -323,9 +376,19 @@ export default function PurchaseScreen() {
               <p style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 6px', lineHeight: 1.4 }}>
                 {courseTitle}
               </p>
-              <p style={{ fontSize: 13, color: textMuted, margin: 0 }}>
-                Lifetime access · Certificate included
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  display: 'inline-block',
+                  fontSize: 11, fontWeight: 700,
+                  color: expiryDays ? '#f59e0b' : '#10b981',
+                  background: expiryDays ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)',
+                  border: `1px solid ${expiryDays ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'}`,
+                  borderRadius: 6, padding: '2px 8px',
+                }}>
+                  {formatValidity(expiryDays)}
+                </span>
+                <span style={{ fontSize: 11, color: textMuted }}>· Certificate included</span>
+              </div>
             </div>
           </div>
         </div>
@@ -466,11 +529,13 @@ export default function PurchaseScreen() {
             </div>
           )}
 
-          {/* Platform Fee */}
+          {/* Platform Fee — hidden for free courses */}
+          {finalPrice > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <span style={{ fontSize: 13, color: textMuted }}>Platform Fee <span style={{ fontSize: 11 }}>(2%)</span></span>
             <span style={{ fontSize: 13, color: textMuted }}>+ {currencyFormater(platformFee)}</span>
           </div>
+          )}
 
           {/* Divider */}
           <div style={{
@@ -571,7 +636,7 @@ export default function PurchaseScreen() {
           ) : (
             <>
               <span style={{ color: '#fff', fontSize: 17, fontWeight: 800 }}>
-                Pay {currencyFormater(finalPrice)}
+                {finalPrice === 0 ? 'Enroll for Free' : `Pay ${currencyFormater(finalPrice)}`}
               </span>
               <div style={{
                 width: 28, height: 28, borderRadius: 8,
@@ -584,7 +649,10 @@ export default function PurchaseScreen() {
           )}
         </button>
         <p style={{ textAlign: 'center', fontSize: 11, color: textMuted, margin: '8px 0 0' }}>
-          Powered by Razorpay · UPI · Cards · Net Banking
+          {finalPrice === 0 ? '🎓 Free enrollment · No payment required' : 'Powered by Razorpay · UPI · Cards · Net Banking'}
+        </p>
+        <p style={{ textAlign: 'center', fontSize: 10, color: textMuted, margin: '4px 0 0', opacity: 0.7 }}>
+          {validityNote(expiryDays)}
         </p>
         </div>{/* end inner max-width wrapper */}
       </div>

@@ -1,13 +1,13 @@
-import { useNavigate, useLocation } from 'react-router-dom';
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Search, Heart, BookOpen, Star, Calculator, FlaskConical, Layers, Video, Bell,
-  AlarmClock, Flame, Award, Clock, History, TrendingUp, Play, CheckCircle2,
-  GraduationCap, Activity, Receipt, Headset, X
+  Search, BookOpen, Star, Calculator, FlaskConical, Layers,
+  Bell, Flame, Award, Clock, TrendingUp, Play, CheckCircle2,
+  GraduationCap, X, ChevronRight, Users, Zap, Video
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCourseStore } from '../store/courseStore';
-import { currencyFormater } from '../lib/utils';
+import { currencyFormater, stripMarkdown } from '../lib/utils';
 import { useTheme } from '../hooks/useTheme';
 import { useNotificationStore } from '../store/notificationStore';
 import { supabase } from '../lib/supabase';
@@ -17,35 +17,31 @@ import { formatWatchTime } from '../lib/format';
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
-  const { isDarkMode, colors } = useTheme();
-  const { courses, loadPublishedCourses, myCourses, loadMyCourses, progress, loadProgress, error: courseError } = useCourseStore();
+  const { isDarkMode } = useTheme();
+  const { courses, loadPublishedCourses, myCourses, loadMyCourses, progress, loadProgress } = useCourseStore();
   const { unreadCount, fetchUnreadCount, subscribeToUnreadCount } = useNotificationStore();
 
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [liveChapters, setLiveChapters] = useState<any[]>([]);
-  const [activeSlide, setActiveSlide] = useState(0);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [streakCount, setStreakCount] = useState(1);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
-  const bannerData = courses;
-
-  useEffect(() => {
-    if (bannerData.length === 0) return;
-    const interval = setInterval(() => {
-      setActiveSlide(prev => (prev + 1) >= bannerData.length ? 0 : prev + 1);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [bannerData.length]);
+  // Random featured courses (changes on each load via useMemo)
+  const featuredCourses = useMemo(() => {
+    const featured = courses.filter(c => c.is_featured);
+    if (featured.length <= 3) return featured;
+    const shuffled = [...featured].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
+  }, [courses]);
 
   useEffect(() => {
     if (user && myCourses.length > 0) {
-      myCourses.forEach((course) => {
-        if (loadProgress) loadProgress(course.id, user.id);
-      });
+      myCourses.forEach(course => { if (loadProgress) loadProgress(course.id, user.id); });
     }
   }, [myCourses, user, loadProgress]);
 
@@ -60,33 +56,34 @@ export default function DashboardScreen() {
     if (user) {
       const enrolledIds = new Set(myCourses.map(c => c.id));
       const unsubscribe = subscribeToUnreadCount(user.id, enrolledIds);
-      return () => {
-        unsubscribe();
-      };
+      return () => { unsubscribe(); };
     }
   }, [user, myCourses, subscribeToUnreadCount]);
 
+  const fetchNotifications = async () => {
+    if (!user) return;
+    try {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(4);
+      if (data) setNotifications(data);
+    } catch (e) { console.error('Notifications fetch error:', e); }
+  };
+
   const fetchLiveChapters = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('chapters')
         .select('*, courses(id, title, thumbnail_url)')
         .eq('is_live', true)
         .eq('is_published', true)
         .order('live_starts_at', { ascending: true });
-
-      if (error) throw error;
       const now = new Date();
-      const activeLive = data?.filter(ch => {
-        if (ch.live_ends_at) {
-          return new Date(ch.live_ends_at) > now;
-        }
-        return true;
-      }) || [];
-      setLiveChapters(activeLive);
-    } catch (error) {
-      console.error('Error fetching live chapters:', error);
-    }
+      setLiveChapters((data || []).filter((ch: any) => ch.live_ends_at ? new Date(ch.live_ends_at) > now : true));
+    } catch (e) { console.error('Error fetching live chapters:', e); }
   };
 
   const checkAndUpdateStreak = async () => {
@@ -95,15 +92,11 @@ export default function DashboardScreen() {
       const streakKey = `user_streak_${user.id}`;
       const storedStreak = localStorage.getItem(streakKey);
       const today = new Date().toISOString().split('T')[0];
-      const yesterdayDate = new Date();
-      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+      const yesterdayDate = new Date(); yesterdayDate.setDate(yesterdayDate.getDate() - 1);
       const yesterday = yesterdayDate.toISOString().split('T')[0];
-
       if (storedStreak) {
         const { count, lastDate } = JSON.parse(storedStreak);
-        if (lastDate === today) {
-          setStreakCount(count); return;
-        }
+        if (lastDate === today) { setStreakCount(count); return; }
         if (lastDate === yesterday) {
           const newCount = count + 1;
           setStreakCount(newCount);
@@ -116,23 +109,19 @@ export default function DashboardScreen() {
         setStreakCount(1);
         localStorage.setItem(streakKey, JSON.stringify({ count: 1, lastDate: today }));
       }
-    } catch (e) {
-      console.error('Error updating streak:', e);
-    }
+    } catch (e) { console.error('Error updating streak:', e); }
   };
 
   const fetchDashboardStats = async () => {
     if (!user) return;
     try {
-      const { data: stats, error } = await supabase.rpc('get_student_analytics', { student_id: user.id });
-      if (error) throw error;
+      const { data: stats } = await supabase.rpc('get_student_analytics', { student_id: user.id });
       const { data: recentData } = await supabase
         .from('chapter_progress')
         .select('updated_at, is_completed, courses(title), chapters(title)')
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false })
         .limit(3);
-
       setAnalyticsData({
         ...stats,
         recent_activity: recentData?.map((item: any) => ({
@@ -142,20 +131,17 @@ export default function DashboardScreen() {
           chapter_title: item.chapters?.title || 'Unknown Chapter'
         }))
       });
-    } catch (e) {
-      console.error('Error fetching dashboard stats:', e);
-    }
+    } catch (e) { console.error('Error fetching dashboard stats:', e); }
   };
 
   const loadData = useCallback(async () => {
     if (user) {
       await Promise.all([
-        loadMyCourses(user), loadPublishedCourses(), fetchLiveChapters(), fetchDashboardStats(), checkAndUpdateStreak()
+        loadMyCourses(user), loadPublishedCourses(), fetchLiveChapters(),
+        fetchDashboardStats(), checkAndUpdateStreak(), fetchNotifications()
       ]);
     } else {
-      await Promise.all([
-        loadPublishedCourses(), fetchLiveChapters()
-      ]);
+      await Promise.all([loadPublishedCourses(), fetchLiveChapters()]);
     }
   }, [user, loadMyCourses, loadPublishedCourses]);
 
@@ -176,404 +162,596 @@ export default function DashboardScreen() {
   useEffect(() => { initDashboard(); }, [initDashboard]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel('public:chapters')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: 'is_live=eq.true' }, (payload) => {
-        fetchLiveChapters();
-      })
+    const channel = supabase.channel('public:chapters')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: 'is_live=eq.true' }, fetchLiveChapters)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
 
   const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning,';
-    if (hour < 18) return 'Good Afternoon,';
-    return 'Good Evening,';
+    const h = new Date().getHours();
+    if (h < 12) return 'Good Morning';
+    if (h < 18) return 'Good Afternoon';
+    return 'Good Evening';
   };
 
-  const renderHeader = () => (
-    <div className={`sticky top-0 z-50 rounded-b-3xl shadow-md transition-colors duration-300 mb-5 pb-5 ${isDarkMode ? 'bg-slate-800/80' : 'bg-white/90'} backdrop-blur-md`}>
-      <div className="px-5 pt-4">
-        {isSearchExpanded ? (
-          <div className="flex flex-row items-center gap-3">
-            <div className={`flex flex-1 items-center px-3 h-12 rounded-xl ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-              <Search size={20} className="text-gray-400" />
-              <input
-                autoFocus
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search courses..."
-                className="flex-1 bg-transparent border-none outline-none ml-2 text-base text-text"
-              />
-              {searchQuery.length > 0 && (
-                <button onClick={() => setSearchQuery('')} className="bg-transparent border-none cursor-pointer">
-                  <X size={16} className="text-gray-400" />
-                </button>
-              )}
-            </div>
-            <button onClick={() => { setIsSearchExpanded(false); setSearchQuery(''); }} className="bg-transparent border-none cursor-pointer font-semibold text-text">
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-row items-center justify-between">
-            <div>
-              <p className="text-sm opacity-80 text-textLight m-0">{getGreeting()}</p>
-              <h2 className="text-xl font-bold text-text m-0">{user?.name || 'Guest'}</h2>
-            </div>
-            <div className="flex flex-row items-center gap-4">
-              <div className="flex flex-row items-center bg-black/5 dark:bg-white/10 px-2 py-1 rounded-xl">
-                <Flame size={16} className="text-orange-500" />
-                <span className="font-bold ml-1 text-xs text-text">{streakCount}</span>
-              </div>
-              <button onClick={() => setIsSearchExpanded(true)} className="p-1 bg-transparent border-none cursor-pointer text-text">
-                <Search size={24} />
-              </button>
-              <button onClick={() => navigate('/notifications')} className="relative p-1 bg-transparent border-none cursor-pointer text-text">
-                <Bell size={24} />
-                {unreadCount > 0 && (
-                  <div className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 border-2 border-white dark:border-slate-800">
-                    <span className="text-[10px] text-white font-bold">{unreadCount > 99 ? '99+' : unreadCount}</span>
-                  </div>
-                )}
-              </button>
-              <button onClick={() => navigate('/profile')} className="bg-transparent border-none cursor-pointer">
-                <Avatar uri={user?.profileImage} name={user?.name} size={40} className="border-2 border-white shadow-sm" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderHeroCarousel = () => {
-    if (courses.length === 0) return null;
-    return (
-      <div className="mb-8 px-8">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
-          {bannerData.slice(0, 3).map((course, index) => (
-            <button 
-              key={course.id}
-              onClick={() => navigate('/coursedetails', { state: { course } })}
-              className="w-full h-[220px] rounded-2xl overflow-hidden relative border-none cursor-pointer shadow-md transition-transform hover:scale-[1.02] active:scale-95 p-0"
-            >
-              <img src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=1200&q=80'} alt="" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/10 p-4 flex flex-col justify-between">
-                {course.is_featured && (
-                  <div className="self-start bg-red-500 px-2 py-1 rounded-md">
-                    <span className="text-[10px] text-white font-bold">FEATURED</span>
-                  </div>
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderQuickActions = () => {
-    const actions = [
-      { id: '1', title: 'Reminders', icon: AlarmClock, route: 'Reminders', color: 'bg-purple-500 shadow-purple-500/20' },
-      { id: '2', title: 'My Learning', icon: GraduationCap, route: 'MyCourses', color: 'bg-emerald-500 shadow-emerald-500/20' },
-      { id: '6', title: 'Progress', icon: Activity, route: 'MyAnalytics', color: 'bg-amber-500 shadow-amber-500/20' },
-      { id: '3', title: 'Purchases', icon: Receipt, route: 'MyPayments', color: 'bg-blue-500 shadow-blue-500/20' },
-      { id: '5', title: 'Support', icon: Headset, route: 'ChatSupport', color: 'bg-cyan-500 shadow-cyan-500/20' },
-    ];
-    return (
-      <div className="mb-8 px-8">
-        <div className="flex flex-wrap gap-6">
-          {actions.map((action) => (
-            <button key={action.id} onClick={() => navigate(`/${action.route.toLowerCase()}`)} className="flex flex-col items-center gap-2 bg-transparent border-none cursor-pointer transition-transform active:scale-95">
-              <div className={`w-14 h-14 rounded-[20px] flex justify-center items-center shadow-lg ${action.color}`}>
-                <action.icon size={24} color="#FFF" />
-              </div>
-              <span className="text-xs font-semibold text-text">{action.title}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderLearningOverview = () => {
-    if (!user || !analyticsData) return null;
-    const watchTimeDisplay = formatWatchTime(analyticsData.total_watch_time);
-    const certCount = analyticsData.course_progress?.filter((c: any) => c.has_certificate).length || 0;
-
-    return (
-      <div className="px-8 mb-8">
-        <div className="flex flex-row items-center justify-between p-6 rounded-2xl bg-card shadow-sm border border-border/50">
-          <div className="flex flex-1 items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex justify-center items-center">
-              <Clock size={20} className="text-blue-500" />
-            </div>
-            <div>
-              <p className="text-base font-bold text-text m-0">{watchTimeDisplay}</p>
-              <p className="text-[10px] font-medium text-textLight m-0">Watch Time</p>
-            </div>
-          </div>
-          <div className="w-px h-8 bg-border mx-2" />
-          <div className="flex flex-1 items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex justify-center items-center">
-              <Award size={20} className="text-emerald-500" />
-            </div>
-            <div>
-              <p className="text-base font-bold text-text m-0">{certCount}</p>
-              <p className="text-[10px] font-medium text-textLight m-0">Certificates</p>
-            </div>
-          </div>
-          <div className="w-px h-8 bg-border mx-2" />
-          <div className="flex flex-1 items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex justify-center items-center">
-              <TrendingUp size={20} className="text-amber-500" />
-            </div>
-            <div>
-              <p className="text-base font-bold text-text m-0">{analyticsData.courses_enrolled || 0}</p>
-              <p className="text-[10px] font-medium text-textLight m-0">Courses</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderQuickAccess = () => {
-    const data = myCourses.length > 0 ? myCourses : courses.slice(0, 5);
-    if (data.length === 0) return null;
-    return (
-      <div className="mb-8 px-8">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-text m-0">{myCourses.length > 0 ? 'Continue Learning' : 'Start Learning'}</h3>
-        </div>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-          {data.map((course) => {
-            const completedCount = progress?.[course.id]?.length || 0;
-            const totalCount = course.chapters?.length || 0;
-            const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-            return (
-              <button key={course.id} onClick={() => navigate('/coursedetails', { state: { course } })} className="w-full h-[120px] rounded-xl overflow-hidden relative shadow-sm cursor-pointer border-none p-0 transition-transform hover:scale-[1.02]">
-                <img src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=1200&q=80'} className="w-full h-full object-cover" alt="" />
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-2 text-left">
-                  <p className="text-xs font-bold text-white truncate m-0">{course.title}</p>
-                  {myCourses.some(c => c.id === course.id) && (
-                    <div className="h-[3px] bg-white/30 rounded-full mt-1">
-                      <div className="h-full bg-primary rounded-full" style={{ width: `${percentage}%` }} />
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  const renderCategories = () => {
-    const displaySubjects = [
-      { id: '1', name: 'Urdu', icon: BookOpen, bg: 'bg-blue-600' },
-      { id: '2', name: 'Math', icon: Calculator, bg: 'bg-teal-500' },
-      { id: '3', name: 'Science', icon: FlaskConical, bg: 'bg-rose-500' },
-      { id: '4', name: 'Premium', icon: Star, bg: 'bg-orange-500' },
-      { id: '5', name: 'Design', icon: Layers, bg: 'bg-purple-600' },
-    ];
-    return (
-      <div className="mb-8 px-8">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-text m-0">Subjects</h3>
-          <button onClick={() => navigate('/courses')} className="text-sm font-semibold text-primary bg-transparent border-none cursor-pointer hover:underline">View All</button>
-        </div>
-        <div className="flex flex-wrap gap-6">
-          {displaySubjects.map((cat) => (
-            <button key={cat.id} onClick={() => navigate('/courses', { state: { subjectFilter: cat.name } })} className="flex flex-col items-center gap-2 w-20 bg-transparent border-none cursor-pointer transition-transform active:scale-95">
-              <div className={`w-14 h-14 rounded-2xl flex justify-center items-center shadow-md ${cat.bg}`}>
-                <cat.icon size={24} color="#FFF" />
-              </div>
-              <span className="text-xs font-medium text-text text-center">{cat.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderLiveClasses = () => {
-    if (liveChapters.length === 0) return null;
-    const now = new Date();
-    const ongoing = liveChapters.filter((chapter) => {
-      const startDate = chapter.live_starts_at ? new Date(chapter.live_starts_at) : null;
-      const endDate = chapter.live_ends_at ? new Date(chapter.live_ends_at) : null;
-      if (!startDate) return false;
-      return endDate ? (startDate <= now && endDate > now) : startDate <= now;
-    });
-    const upcoming = liveChapters.filter((chapter) => {
-      const startDate = chapter.live_starts_at ? new Date(chapter.live_starts_at) : null;
-      return startDate ? startDate > now : false;
-    });
-
-    if (ongoing.length === 0 && upcoming.length === 0) return null;
-
-    const renderLiveCard = (chapter: any, isOngoing: boolean) => {
-      const isEnrolled = myCourses.some(c => c.id === chapter.course_id);
-      const startDate = chapter.live_starts_at ? new Date(chapter.live_starts_at) : null;
-
-      const handleJoinPress = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (isEnrolled) {
-          navigate('/chapterplayer', { state: { courseId: chapter.course_id, courseTitle: chapter.courses?.title || chapter.title, chapter, hasAccess: true } });
-        } else {
-          navigate('/coursedetails', { state: { course: chapter.courses || { id: chapter.course_id, title: chapter.title } } });
-        }
-      };
-
-      return (
-        <div key={chapter.id} onClick={() => navigate('/coursedetails', { state: { course: chapter.courses || { id: chapter.course_id, title: chapter.title } } })} className="w-full rounded-2xl p-4 bg-card shadow-sm border border-border/50 mb-3 cursor-pointer">
-          <div className="flex justify-between mb-3">
-            <div className={`flex items-center px-2 py-1 rounded-lg gap-1 ${isOngoing ? 'bg-red-500 animate-pulse' : 'bg-red-500'}`}>
-              <Video size={12} color="#fff" />
-              <span className="text-white text-[10px] font-bold">{isOngoing ? 'LIVE NOW' : 'LIVE'}</span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 mb-4">
-            <h4 className="text-base font-bold text-text m-0 line-clamp-2">{chapter.title}</h4>
-            <p className="text-xs text-textLight m-0 truncate">{chapter.courses?.title}</p>
-            {startDate && (
-              <p className="text-xs font-semibold text-primary mt-1 m-0">
-                {startDate.toLocaleDateString()} {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            )}
-          </div>
-          <button onClick={handleJoinPress} className={`flex items-center justify-center py-2 rounded-lg gap-1.5 w-full border-none cursor-pointer text-white font-semibold text-xs transition-opacity hover:opacity-90 ${isOngoing ? 'bg-green-500' : (isEnrolled ? 'bg-primary' : 'bg-gray-400')}`}>
-            {isOngoing ? <Video size={14} color="#fff" /> : <Bell size={14} color="#fff" />}
-            <span>{isOngoing ? 'Join Now' : 'Set Reminder'}</span>
-          </button>
-        </div>
-      );
-    };
-
-    return (
-      <div className="mb-8 px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {ongoing.length > 0 && (
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-text mb-2 m-0">Ongoing Live Classes</h3>
-              {ongoing.map(ch => renderLiveCard(ch, true))}
-            </div>
-          )}
-          {upcoming.length > 0 && (
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-text mb-2 m-0">Upcoming Live Classes</h3>
-              {upcoming.map(ch => renderLiveCard(ch, false))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderFeaturedCourses = () => {
-    const isSearching = searchQuery.length > 0;
-    const displayedCourses = courses.filter(c =>
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) && (isSearching ? true : c.is_featured)
-    );
-    if (displayedCourses.length === 0) return null;
-
-    return (
-      <div className="mb-8 px-8">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-text m-0">{isSearching ? 'Search Results' : 'Featured Courses'}</h3>
-          {!isSearching && <button onClick={() => navigate('/courses')} className="text-sm font-semibold text-primary bg-transparent border-none cursor-pointer hover:underline">See All</button>}
-        </div>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
-          {displayedCourses.map(course => {
-            const enrolledCourse = myCourses.find(c => c.id === course.id);
-            const isEnrolled = !!enrolledCourse;
-            let isExpired = false;
-            if (isEnrolled && enrolledCourse?.enrollment?.expiry_date) {
-              isExpired = new Date(enrolledCourse.enrollment.expiry_date) < new Date();
-            }
-            const snippet = course.description ? `${course.description.slice(0, 80)}${course.description.length > 80 ? '...' : ''}` : '';
-
-            return (
-              <div key={course.id} onClick={() => navigate('/coursedetails', { state: { course } })} className="w-full flex flex-col rounded-[20px] bg-card overflow-hidden shadow-sm border border-border/50 cursor-pointer transition-transform hover:scale-[1.02] active:scale-95">
-                <div className="h-40 relative">
-                  <img src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=1200&q=80'} className="w-full h-full object-cover" alt="" />
-                  <div className="absolute top-3 left-3 bg-black/70 px-2.5 py-1 rounded-md">
-                    <span className="text-white text-xs font-bold">{course.price ? `₹${currencyFormater(Number(course.price))}` : 'Free'}</span>
-                  </div>
-                  {isEnrolled && (
-                    <div className={`absolute bottom-2 left-2 px-2 py-1 rounded-md ${isExpired ? 'bg-red-500' : 'bg-green-500'}`}>
-                      <span className="text-white text-[10px] font-bold">{isExpired ? 'EXPIRED' : 'ENROLLED'}</span>
-                    </div>
-                  )}
-                  <button className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-white/80 dark:bg-black/50 border-none cursor-pointer">
-                    <Heart size={16} className="text-red-500 fill-red-500" />
-                  </button>
-                </div>
-                <div className="flex flex-col flex-1 p-4 gap-2">
-                  <div className="flex-1">
-                    <h4 className="text-base font-bold text-text leading-5 line-clamp-2 m-0">{course.title}</h4>
-                    <p className="text-xs text-textLight mt-1 line-clamp-2 m-0">{snippet}</p>
-                  </div>
-                  <button onClick={(e) => { e.stopPropagation(); navigate('/coursedetails', { state: { course } }); }} className={`w-full py-3 rounded-xl border-none font-bold text-sm text-white cursor-pointer transition-opacity hover:opacity-90 ${isEnrolled ? (isExpired ? 'bg-red-500' : 'bg-green-500') : 'bg-primary'}`}>
-                    {isEnrolled ? (isExpired ? 'Renew Access' : 'Continue Learning') : (course.price ? 'Buy Now' : 'Enroll Now')}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  const renderRecentActivity = () => {
-    if (!user || !analyticsData?.recent_activity?.length) return null;
-    return (
-      <div className="mb-8 px-8">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
-            <History size={18} className="text-text" />
-            <h3 className="text-xl font-bold text-text m-0">Recent Activity</h3>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2.5">
-          {analyticsData.recent_activity.map((activity: any, index: number) => (
-            <div key={index} onClick={() => navigate('/myanalytics')} className="flex items-center p-3 rounded-2xl bg-card shadow-sm border border-border/50 gap-3 cursor-pointer transition-transform active:scale-[0.98]">
-              <div className={`w-7 h-7 rounded-full flex justify-center items-center ${activity.is_completed ? 'bg-emerald-500/10' : 'bg-blue-500/10'}`}>
-                {activity.is_completed ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Play size={14} className="text-blue-500" />}
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <h4 className="text-sm font-semibold text-text truncate m-0">{activity.chapter_title}</h4>
-                <p className="text-[11px] text-textLight mt-0.5 truncate m-0">{activity.course_title} • {new Date(activity.updated_at).toLocaleDateString()}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+  const getTimeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
   };
 
   if (isInitialLoading || loadingError) {
     return <AppLoader isLoading={isInitialLoading} error={loadingError} onRetry={initDashboard} />;
   }
 
+  // Search mode — simple full-width results
+  if (searchQuery.length > 0) {
+    const results = courses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    return (
+      <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        {/* Search Header */}
+        <div className={`sticky top-0 z-50 px-6 py-3 flex items-center gap-3 shadow-sm ${isDarkMode ? 'bg-gray-900 border-b border-gray-800' : 'bg-white border-b border-gray-200'}`}>
+          <div className={`flex flex-1 items-center px-4 h-11 rounded-xl ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+            <Search size={18} className="text-gray-400 mr-2" />
+            <input
+              autoFocus
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search courses..."
+              className="flex-1 bg-transparent border-none outline-none text-text text-sm"
+            />
+          </div>
+          <button onClick={() => setSearchQuery('')} className="text-sm font-semibold text-primary bg-transparent border-none cursor-pointer">Cancel</button>
+        </div>
+        <div className="px-8 py-6">
+          <h3 className="text-base font-bold text-text mb-4">Search Results ({results.length})</h3>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
+            {results.map(course => (
+              <CourseCard key={course.id} course={course} myCourses={myCourses} navigate={navigate} currencyFormater={currencyFormater} />
+            ))}
+          </div>
+          {results.length === 0 && (
+            <div className="text-center py-16">
+              <BookOpen size={40} className="text-gray-300 mx-auto mb-3" />
+              <p className="text-textLight">No courses found for "{searchQuery}"</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Theme tokens ────────────────────────────────────────────
+  const bg = isDarkMode ? '#0f172a' : '#f1f5f9';
+  const cardBg = isDarkMode ? '#1e293b' : '#ffffff';
+  const border = isDarkMode ? '#334155' : '#e2e8f0';
+  const textPrimary = isDarkMode ? '#f1f5f9' : '#0f172a';
+  const textMuted = isDarkMode ? '#94a3b8' : '#64748b';
+
+  // Stats
+  const watchTimeDisplay = analyticsData ? formatWatchTime(analyticsData.total_watch_time) : '0h';
+  const certCount = analyticsData?.course_progress?.filter((c: any) => c.has_certificate).length || 0;
+  const enrolledCount = myCourses.length;
+  const completedCourses = analyticsData?.course_progress?.filter((c: any) => c.completion_percentage === 100).length || 0;
+
+  const stats = [
+    { label: 'Enrolled Courses', value: enrolledCount, icon: BookOpen, color: '#6366f1', bg: 'rgba(99,102,241,0.1)', sub: `+${Math.min(enrolledCount, 2)} this month` },
+    { label: 'Completed', value: completedCourses, icon: CheckCircle2, color: '#10b981', bg: 'rgba(16,185,129,0.1)', sub: '+1 this month' },
+    { label: 'Certificates', value: certCount, icon: Award, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', sub: 'View all' },
+    { label: 'Learning Hours', value: watchTimeDisplay, icon: Clock, color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', sub: '+6h this week' },
+  ];
+
+  const categories = [
+    { id: '1', name: 'Urdu', icon: BookOpen, color: '#3b82f6', count: courses.filter(c => c.video_subject?.toLowerCase() === 'urdu').length || 0 },
+    { id: '2', name: 'Math', icon: Calculator, color: '#14b8a6', count: courses.filter(c => c.video_subject?.toLowerCase() === 'math').length || 0 },
+    { id: '3', name: 'Science', icon: FlaskConical, color: '#ef4444', count: courses.filter(c => c.video_subject?.toLowerCase() === 'science').length || 0 },
+    { id: '4', name: 'Premium', icon: Star, color: '#f97316', count: courses.filter(c => c.price && c.price > 0).length || 0 },
+    { id: '5', name: 'Design', icon: Layers, color: '#a855f7', count: courses.filter(c => c.video_subject?.toLowerCase() === 'design').length || 0 },
+    { id: '6', name: 'Video', icon: Video, color: '#06b6d4', count: 0 },
+  ];
+
+  // Continue learning — most recent enrolled courses
+  const continueLearning = myCourses.slice(0, 4);
+  const activeCourse = continueLearning[0];
+  const activeProgress = activeCourse
+    ? (activeCourse.chapters?.length ? Math.round(((progress?.[activeCourse.id]?.length || 0) / activeCourse.chapters.length) * 100) : 0)
+    : 0;
+
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      <div className="flex flex-col">
-        {renderHeader()}
-        {searchQuery.length === 0 && renderHeroCarousel()}
-        {searchQuery.length === 0 && renderLearningOverview()}
-        {searchQuery.length === 0 && renderQuickActions()}
-        {searchQuery.length === 0 && renderQuickAccess()}
-        {searchQuery.length === 0 && renderCategories()}
-        {searchQuery.length === 0 && renderLiveClasses()}
-        {renderFeaturedCourses()}
-        {searchQuery.length === 0 && renderRecentActivity()}
+    <div style={{ minHeight: '100vh', background: bg }}>
+
+      {/* ── Top Search/Header Bar ── */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 40,
+        background: isDarkMode ? '#0f172a' : '#ffffff',
+        borderBottom: `1px solid ${border}`,
+        padding: '12px 24px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+      }}>
+        {/* Logo */}
+        <img src="/logo.png" alt="EduOrbit" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        <span style={{ fontSize: 16, fontWeight: 800, color: textPrimary, letterSpacing: '-0.3px', flexShrink: 0 }}>EduOrbit</span>
+
+        {/* Search bar */}
+        <button
+          onClick={() => setIsSearchExpanded(true)}
+          style={{
+            flex: 1, display: 'flex', alignItems: 'center', gap: 10,
+            background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+            border: `1px solid ${border}`, borderRadius: 10,
+            padding: '9px 14px', cursor: 'pointer',
+            maxWidth: 500,
+          }}
+        >
+          <Search size={15} color={textMuted} />
+          <span style={{ fontSize: 13, color: textMuted }}>Search courses, resources, students...</span>
+          <span style={{
+            marginLeft: 'auto', fontSize: 11, color: textMuted,
+            background: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace',
+          }}>⌘ K</span>
+        </button>
+
+        {/* Right icons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            background: 'rgba(249,115,22,0.1)', padding: '5px 10px', borderRadius: 20,
+            border: '1px solid rgba(249,115,22,0.2)',
+          }}>
+            <Flame size={14} color="#f97316" />
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#f97316' }}>{streakCount}</span>
+          </div>
+          <button
+            onClick={() => navigate('/notifications')}
+            style={{ position: 'relative', width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Bell size={18} color={textMuted} />
+            {unreadCount > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                minWidth: 16,
+                height: 16,
+                borderRadius: 8,
+                backgroundColor: '#ef4444',
+                border: `2px solid ${isDarkMode ? '#0f172a' : '#ffffff'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 3px',
+                zIndex: 10
+              }}>
+                <span style={{
+                  color: 'white',
+                  fontSize: 9,
+                  fontWeight: 'bold',
+                  lineHeight: 1
+                }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              </div>
+            )}
+          </button>
+          <button onClick={() => navigate('/profile')} style={{ border: 'none', cursor: 'pointer', background: 'transparent', padding: 0 }}>
+            <Avatar uri={user?.profileImage} name={user?.name} size={36} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Full-screen Search Overlay ── */}
+      {isSearchExpanded && (
+        <div style={{ position: 'fixed', inset: 0, background: isDarkMode ? 'rgba(15,23,42,0.98)' : 'rgba(255,255,255,0.98)', zIndex: 100, padding: 24, backdropFilter: 'blur(8px)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: 600, margin: '0 auto' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: isDarkMode ? '#1e293b' : '#f1f5f9', border: `1px solid ${border}`, borderRadius: 12, padding: '10px 16px' }}>
+              <Search size={18} color={textMuted} />
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search courses..."
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 15, color: textPrimary }}
+              />
+            </div>
+            <button onClick={() => { setIsSearchExpanded(false); setSearchQuery(''); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#6366f1' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Main Two-Column Layout ── */}
+      <div style={{ display: 'flex', gap: 0, maxWidth: 1440, margin: '0 auto' }}>
+
+        {/* ═══ LEFT COLUMN ═══ */}
+        <div style={{ flex: 1, minWidth: 0, padding: '28px 28px 40px' }}>
+
+          {/* Welcome */}
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: 26, fontWeight: 800, color: textPrimary, margin: 0, letterSpacing: '-0.4px' }}>
+              {getGreeting()}, {user?.name?.split(' ')[0] || 'Learner'} 👋
+            </h2>
+            <p style={{ fontSize: 14, color: textMuted, margin: '4px 0 0' }}>
+              Let's continue your learning journey today.
+            </p>
+          </div>
+
+          {/* ── Stats Cards ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
+            {stats.map((stat, i) => (
+              <div key={i} style={{
+                background: cardBg, border: `1px solid ${border}`,
+                borderRadius: 16, padding: '16px 18px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.08)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <stat.icon size={18} color={stat.color} />
+                  </div>
+                  <span style={{ fontSize: 11, color: textMuted, fontWeight: 500 }}>{stat.label}</span>
+                </div>
+                <p style={{ fontSize: 24, fontWeight: 800, color: textPrimary, margin: '0 0 4px' }}>{stat.value}</p>
+                <p style={{ fontSize: 11, color: stat.color, fontWeight: 600, margin: 0 }}>{stat.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Continue Learning ── */}
+          {continueLearning.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h3 style={{ fontSize: 17, fontWeight: 800, color: textPrimary, margin: 0 }}>Continue Learning</h3>
+                <button onClick={() => navigate('/mycourses')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  View All <ChevronRight size={14} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: 16 }}>
+                {/* Big active course card */}
+                {activeCourse && (
+                  <div
+                    onClick={() => navigate('/coursedetails', { state: { course: activeCourse } })}
+                    style={{
+                      width: 260, flexShrink: 0, borderRadius: 20, overflow: 'hidden',
+                      background: cardBg, border: `1px solid ${border}`,
+                      cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+                      transition: 'transform 0.2s',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.02)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
+                  >
+                    <div style={{ position: 'relative', height: 160 }}>
+                      <img src={activeCourse.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80'} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }} />
+                      <div style={{
+                        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+                        width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.9)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                      }}>
+                        <Play size={18} color="#6366f1" fill="#6366f1" />
+                      </div>
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '8px 12px' }}>
+                        <div style={{ height: 3, background: 'rgba(255,255,255,0.3)', borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${activeProgress}%`, background: '#6366f1', borderRadius: 99 }} />
+                        </div>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', marginTop: 3, display: 'block' }}>{activeProgress}% complete</span>
+                      </div>
+                    </div>
+                    <div style={{ padding: '14px 14px 16px' }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: '0 0 4px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {activeCourse.title}
+                      </p>
+                      <p style={{ fontSize: 11, color: textMuted, margin: '0 0 12px' }}>
+                        {activeCourse.teacher?.name || activeCourse.instructor_name || 'Instructor'}
+                      </p>
+                      <button
+                        onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course: activeCourse } }); }}
+                        style={{
+                          width: '100%', padding: '9px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                          color: '#fff', fontSize: 12, fontWeight: 700,
+                        }}>
+                        Continue
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Remaining courses list */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {continueLearning.slice(1, 4).map(course => {
+                    const pct = course.chapters?.length
+                      ? Math.round(((progress?.[course.id]?.length || 0) / course.chapters.length) * 100)
+                      : 0;
+                    return (
+                      <div
+                        key={course.id}
+                        onClick={() => navigate('/coursedetails', { state: { course } })}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 12,
+                          background: cardBg, border: `1px solid ${border}`,
+                          borderRadius: 14, padding: '10px 14px',
+                          cursor: 'pointer', transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = isDarkMode ? '#273549' : '#f8f9fc'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = cardBg; }}
+                      >
+                        <img src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=200&q=80'} alt="" style={{ width: 52, height: 40, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: textPrimary, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{course.title}</p>
+                          <p style={{ fontSize: 11, color: textMuted, margin: '0 0 6px' }}>{pct === 0 ? 'Not started' : `${pct}% complete`}</p>
+                          <div style={{ height: 4, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, #6366f1, #8b5cf6)', borderRadius: 99 }} />
+                          </div>
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1', flexShrink: 0 }}>{pct}%</span>
+                      </div>
+                    );
+                  })}
+
+                  {continueLearning.length === 0 && (
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, background: cardBg, borderRadius: 14, border: `1px solid ${border}`, padding: 24 }}>
+                      <GraduationCap size={32} color={textMuted} />
+                      <p style={{ fontSize: 13, color: textMuted, margin: 0, textAlign: 'center' }}>No enrolled courses yet.<br />Explore and enroll below!</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Course Categories ── */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800, color: textPrimary, margin: 0 }}>Course Categories</h3>
+              <button onClick={() => navigate('/courses')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}>
+                View All <ChevronRight size={14} />
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => navigate('/courses', { state: { subjectFilter: cat.name } })}
+                  style={{
+                    background: cardBg, border: `1px solid ${border}`,
+                    borderRadius: 14, padding: '14px 16px',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = cat.color; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = border; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; }}
+                >
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: `${cat.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <cat.icon size={18} color={cat.color} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: 0 }}>{cat.name}</p>
+                    <p style={{ fontSize: 11, color: textMuted, margin: 0 }}>{cat.count} Courses</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Featured Courses (full width in left panel) ── */}
+          {courses.filter(c => c.is_featured).length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h3 style={{ fontSize: 17, fontWeight: 800, color: textPrimary, margin: 0 }}>Featured Courses</h3>
+                <button onClick={() => navigate('/courses')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  See All <ChevronRight size={14} />
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                {courses.filter(c => c.is_featured).slice(0, 6).map(course => (
+                  <CourseCard key={course.id} course={course} myCourses={myCourses} navigate={navigate} currencyFormater={currencyFormater} isDarkMode={isDarkMode} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ═══ RIGHT SIDEBAR ═══ */}
+        <div style={{
+          width: 340, flexShrink: 0,
+          borderLeft: `1px solid ${border}`,
+          padding: '28px 20px 40px',
+          position: 'sticky', top: 57, height: 'calc(100vh - 57px)', overflowY: 'auto',
+          background: isDarkMode ? '#0f172a' : '#fafafa',
+        }}>
+
+          {/* ── Notifications ── */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: textPrimary, margin: 0 }}>Notifications</h3>
+              <button onClick={() => navigate('/notifications')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#6366f1' }}>View All</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {notifications.length > 0 ? notifications.map((notif: any, i: number) => (
+                <div key={i} style={{
+                  display: 'flex', gap: 10, alignItems: 'flex-start',
+                  background: cardBg, border: `1px solid ${border}`,
+                  borderRadius: 12, padding: '10px 12px',
+                }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                    background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Bell size={14} color="#6366f1" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: textPrimary, margin: '0 0 2px', lineHeight: 1.4 }}>
+                      {notif.title || notif.message || 'New notification'}
+                    </p>
+                    <p style={{ fontSize: 10, color: textMuted, margin: 0 }}>{getTimeAgo(notif.created_at)}</p>
+                  </div>
+                </div>
+              )) : (
+                // Placeholder notifications when empty
+                [
+                  { title: 'Welcome to EduOrbit!', sub: 'Start your learning journey' },
+                  { title: 'New courses available', sub: 'Check out the latest courses' },
+                ].map((n, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: cardBg, border: `1px solid ${border}`, borderRadius: 12, padding: '10px 12px' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Bell size={14} color="#6366f1" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: textPrimary, margin: '0 0 2px' }}>{n.title}</p>
+                      <p style={{ fontSize: 10, color: textMuted, margin: 0 }}>{n.sub}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* ── Featured Course Cards (Random, bottom-right) ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: textPrimary, margin: 0 }}>
+                ✨ Featured Picks
+              </h3>
+              <button onClick={() => navigate('/courses')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#6366f1' }}>See All</button>
+            </div>
+
+            {featuredCourses.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {featuredCourses.map(course => {
+                  const isEnrolled = myCourses.some(c => c.id === course.id);
+                  const enrolledCourse = myCourses.find(c => c.id === course.id);
+                  const isExpired = enrolledCourse?.enrollment?.expiry_date
+                    ? new Date(enrolledCourse.enrollment.expiry_date) < new Date()
+                    : false;
+                  return (
+                    <div
+                      key={course.id}
+                      onClick={() => navigate('/coursedetails', { state: { course } })}
+                      style={{
+                        background: cardBg, border: `1px solid ${border}`,
+                        borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
+                        transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.1)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; }}
+                    >
+                      {/* Thumbnail */}
+                      <div style={{ position: 'relative', height: 120 }}>
+                        <img src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80'} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.4), transparent)' }} />
+                        <div style={{
+                          position: 'absolute', top: 8, left: 8,
+                          background: 'rgba(0,0,0,0.65)', borderRadius: 6,
+                          padding: '3px 8px', backdropFilter: 'blur(4px)',
+                        }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>
+                            {course.price ? `₹${currencyFormater(Number(course.price))}` : 'Free'}
+                          </span>
+                        </div>
+                        {isEnrolled && (
+                          <div style={{
+                            position: 'absolute', bottom: 8, left: 8,
+                            background: isExpired ? '#ef4444' : '#10b981',
+                            borderRadius: 6, padding: '2px 7px',
+                          }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: '#fff' }}>{isExpired ? 'EXPIRED' : 'ENROLLED'}</span>
+                          </div>
+                        )}
+                        {course.is_featured && (
+                          <div style={{ position: 'absolute', top: 8, right: 8, background: '#f59e0b', borderRadius: 6, padding: '2px 6px' }}>
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#fff' }}>★ FEATURED</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ padding: '12px 14px' }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: '0 0 3px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' as any }}>
+                          {course.title}
+                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Users size={11} color={textMuted} />
+                            <span style={{ fontSize: 11, color: textMuted }}>{course.purchases_count || 0} enrolled</span>
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course } }); }}
+                            style={{
+                              padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                              background: isEnrolled ? (isExpired ? '#ef4444' : '#10b981') : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                              color: '#fff',
+                            }}
+                          >
+                            {isEnrolled ? (isExpired ? 'Renew' : 'Continue') : (course.price ? 'Buy Now' : 'Enroll')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '24px 0', background: cardBg, borderRadius: 16, border: `1px solid ${border}` }}>
+                <Zap size={28} color={textMuted} style={{ margin: '0 auto 8px' }} />
+                <p style={{ fontSize: 13, color: textMuted, margin: 0 }}>No featured courses yet</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Reusable Course Card ────────────────────────────────────────────
+function CourseCard({ course, myCourses, navigate, currencyFormater, isDarkMode }: any) {
+  const enrolledCourse = myCourses.find((c: any) => c.id === course.id);
+  const isEnrolled = !!enrolledCourse;
+  const isExpired = enrolledCourse?.enrollment?.expiry_date
+    ? new Date(enrolledCourse.enrollment.expiry_date) < new Date()
+    : false;
+
+  return (
+    <div
+      onClick={() => navigate('/coursedetails', { state: { course } })}
+      className={`flex flex-col rounded-[20px] overflow-hidden shadow-sm border cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+    >
+      <div className="h-40 relative">
+        <img src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80'} className="w-full h-full object-cover" alt="" />
+        <div className="absolute top-3 left-3 bg-black/70 px-2 py-0.5 rounded-md">
+          <span className="text-white text-xs font-bold">{course.price ? `₹${currencyFormater(Number(course.price))}` : 'Free'}</span>
+        </div>
+        {isEnrolled && (
+          <div className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-md ${isExpired ? 'bg-red-500' : 'bg-green-500'}`}>
+            <span className="text-white text-[9px] font-bold">{isExpired ? 'EXPIRED' : 'ENROLLED'}</span>
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col flex-1 p-4 gap-2">
+        <h4 className={`text-sm font-bold leading-5 line-clamp-2 m-0 ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{course.title}</h4>
+        <p className={`text-xs line-clamp-2 m-0 flex-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          {course.description ? stripMarkdown(course.description).slice(0, 100) : ''}
+        </p>
+        <button
+          onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course } }); }}
+          className={`w-full py-2.5 rounded-xl border-none font-bold text-xs text-white cursor-pointer transition-opacity hover:opacity-90 ${isEnrolled ? (isExpired ? 'bg-red-500' : 'bg-green-500') : 'bg-primary'}`}
+        >
+          {isEnrolled ? (isExpired ? 'Renew Access' : 'Continue Learning') : (course.price ? 'Buy Now' : 'Enroll Now')}
+        </button>
       </div>
     </div>
   );

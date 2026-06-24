@@ -1,90 +1,167 @@
 import React from 'react';
 import { useTheme } from '../hooks/useTheme';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Book, GraduationCap, User, Settings, LogOut, Menu, ChevronLeft } from 'lucide-react';
+import {
+  Home, Book, GraduationCap, User, LogOut, Menu, ChevronLeft,
+  Bell, TrendingUp, Award, CreditCard, Ticket, Headset, Moon
+} from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-
 import { useUIStore } from '../store/uiStore';
 
-const NAV_ITEMS = [
-  { name: 'Dashboard', route: '/dashboard', label: 'Home', icon: Home },
-  { name: 'Courses', route: '/courses', label: 'Courses', icon: Book },
-  { name: 'MyCourses', route: '/mycourses', label: 'My Learning', icon: GraduationCap },
-  { name: 'Profile', route: '/profile', label: 'Profile', icon: User },
+const NAV_SECTIONS = [
+  {
+    label: 'Main',
+    items: [
+      { name: 'Dashboard',     route: '/dashboard',    label: 'Dashboard',     icon: Home },
+      { name: 'Courses',       route: '/courses',      label: 'Courses',       icon: Book },
+      { name: 'MyCourses',     route: '/mycourses',    label: 'My Learning',   icon: GraduationCap },
+    ],
+  },
+  {
+    label: 'Activity',
+    items: [
+      { name: 'Notifications', route: '/notifications',label: 'Notifications', icon: Bell },
+      { name: 'MyAnalytics',   route: '/myanalytics',  label: 'Analytics',     icon: TrendingUp },
+      { name: 'Certificates',  route: '/certificates', label: 'Certificates',  icon: Award },
+      { name: 'MyPayments',    route: '/mypayments',   label: 'Payments',      icon: CreditCard },
+      { name: 'Coupons',       route: '/coupons',      label: 'Coupons',       icon: Ticket },
+      { name: 'ChatSupport',   route: '/chatsupport',  label: 'Support',       icon: Headset },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [
+      { name: 'Profile',       route: '/profile',      label: 'Profile',       icon: User },
+    ],
+  },
 ];
 
 export const Sidebar = () => {
-  const { colors, isDarkMode } = useTheme();
+  const { isDarkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const { signOut } = useAuthStore();
-  const { isSidebarCollapsed, toggleSidebar } = useUIStore();
+  const { sidebarWidth, setSidebarWidth } = useUIStore();
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/login');
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      // Constrain sidebar width between 200px and 450px
+      const newWidth = Math.max(200, Math.min(450, startWidth + (moveEvent.clientX - startX)));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
   return (
-    <div 
-      className={`h-screen ${isSidebarCollapsed ? 'w-20' : 'w-64'} flex flex-col fixed left-0 top-0 border-r z-50 transition-all duration-300
+    <div
+      style={{ width: `${sidebarWidth}px` }}
+      className={`h-screen flex flex-col fixed left-0 top-0 border-r z-50 transition-none
         ${isDarkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}
     >
-      <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} h-20`}>
-        {!isSidebarCollapsed && (
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-primary flex-shrink-0`}>
-              <GraduationCap size={20} className="text-white" />
-            </div>
-            <h1 className="text-xl font-bold text-text m-0 whitespace-nowrap">EduOrbit</h1>
+      {/* Logo / Header */}
+      <div className={`flex items-center justify-between px-5 h-[70px] border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-100'} flex-shrink-0`}>
+        <div className="flex items-center gap-2 overflow-hidden">
+          <img
+            src="/logo.png"
+            alt="EduOrbit"
+            className="w-9 h-9 object-contain flex-shrink-0 rounded-lg"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+          <span className="text-lg font-bold text-text whitespace-nowrap tracking-tight">EduOrbit</span>
+        </div>
+      </div>
+
+      {/* Nav sections */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {NAV_SECTIONS.map((section, si) => (
+          <div key={si} className={si > 0 ? 'mt-3' : ''}>
+            {/* Section label */}
+            <p className={`text-[10px] font-bold uppercase tracking-widest mb-1.5 px-3
+              ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>
+              {section.label}
+            </p>
+
+            {section.items.map((item) => {
+              const isFocused = location.pathname === item.route ||
+                (item.route !== '/dashboard' && location.pathname.startsWith(item.route));
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => navigate(item.route)}
+                  className={`w-full flex items-center justify-start px-3 gap-3 py-2.5 rounded-xl border-none cursor-pointer transition-all duration-150
+                    ${isFocused
+                      ? 'bg-primary/10 text-primary'
+                      : `bg-transparent text-textLight hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-text`
+                    }`}
+                >
+                  <item.icon
+                    size={20}
+                    strokeWidth={isFocused ? 2.5 : 2}
+                    className="flex-shrink-0"
+                  />
+                  <span className={`text-sm whitespace-nowrap ${isFocused ? 'font-semibold' : 'font-medium'}`}>
+                    {item.label}
+                  </span>
+                  {isFocused && (
+                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                  )}
+                </button>
+              );
+            })}
           </div>
-        )}
-        <button 
-          onClick={toggleSidebar} 
-          className="p-1 rounded-md bg-transparent border-none cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 text-textLight"
+        ))}
+      </nav>
+
+      {/* Footer Settings & Sign Out */}
+      <div className={`p-3 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-100'} flex-shrink-0 space-y-1`}>
+        {/* Dark Mode Toggle */}
+        <div className="flex items-center justify-between px-3 py-2 rounded-xl transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-textLight hover:text-text">
+          <div className="flex items-center gap-3">
+            <Moon size={20} className="flex-shrink-0" />
+            <span className="text-sm font-medium whitespace-nowrap">Dark Mode</span>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" className="sr-only peer" checked={isDarkMode} onChange={toggleTheme} />
+            <div className={`w-9 h-5 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${isDarkMode ? 'bg-primary' : 'bg-gray-300'}`} />
+          </label>
+        </div>
+
+        {/* Log Out */}
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center justify-start px-3 gap-3 py-2.5 rounded-xl border-none cursor-pointer transition-colors bg-transparent text-textLight hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
         >
-          {isSidebarCollapsed ? <Menu size={24} /> : <ChevronLeft size={24} />}
+          <LogOut size={20} className="flex-shrink-0" />
+          <span className="text-sm font-medium whitespace-nowrap">Log Out</span>
         </button>
       </div>
 
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
-          const isFocused = location.pathname.startsWith(item.route);
-          
-          return (
-            <button
-              key={item.name}
-              onClick={() => navigate(item.route)}
-              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-start px-4'} gap-3 py-3 rounded-xl border-none cursor-pointer transition-colors duration-200
-                ${isFocused 
-                  ? 'bg-primary/10 text-primary' 
-                  : 'bg-transparent text-textLight hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-text'}`}
-              title={isSidebarCollapsed ? item.label : undefined}
-            >
-              <item.icon 
-                size={22} 
-                strokeWidth={isFocused ? 2.5 : 2} 
-                className={`flex-shrink-0 ${isFocused ? 'text-primary' : ''}`} 
-              />
-              {!isSidebarCollapsed && (
-                <span className={`text-sm font-medium whitespace-nowrap ${isFocused ? 'font-semibold' : ''}`}>
-                  {item.label}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="p-4 border-t border-border/50">
-        <button
-          onClick={handleSignOut}
-          className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-start px-4'} gap-3 py-3 rounded-xl border-none cursor-pointer transition-colors duration-200 bg-transparent text-textLight hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500`}
-          title={isSidebarCollapsed ? 'Log Out' : undefined}
-        >
-          <LogOut size={22} className="flex-shrink-0" />
-          {!isSidebarCollapsed && <span className="text-sm font-medium whitespace-nowrap">Log Out</span>}
-        </button>
+      {/* Resize Handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        className="absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize z-50 transition-colors duration-150 hover:bg-primary/30 active:bg-primary/60 group flex items-center justify-center"
+      >
+        <div className="w-[2px] h-8 bg-gray-400/30 group-hover:bg-primary/60 rounded-full transition-colors duration-150" />
       </div>
     </div>
   );

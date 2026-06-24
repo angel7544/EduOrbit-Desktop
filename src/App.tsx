@@ -30,9 +30,9 @@ import MyAnalyticsScreen from './screens/MyAnalyticsScreen';
 import MyPaymentsScreen from './screens/MyPaymentsScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
-import PermissionScreen from './screens/PermissionScreen';
 import PurchaseScreen from './screens/PurchaseScreen';
 import SupportTicketListScreen from './screens/SupportTicketListScreen';
+import { NotificationManager } from './components/NotificationManager';
 
 export default function App() {
   const { isDarkMode, colors } = useTheme();
@@ -43,20 +43,35 @@ export default function App() {
     initialize();
   }, [initialize]);
 
+  // Apply dark/light mode class to html element immediately and on every change
   useEffect(() => {
+    const root = document.documentElement;
     if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      document.body.style.backgroundColor = colors.background;
-      document.body.style.color = colors.text;
+      root.classList.add('dark');
+      root.setAttribute('data-theme', 'dark');
+      document.body.style.backgroundColor = '#111827';
+      document.body.style.color = '#f9fafb';
     } else {
-      document.documentElement.classList.remove('dark');
-      document.body.style.backgroundColor = colors.background;
-      document.body.style.color = colors.text;
+      root.classList.remove('dark');
+      root.setAttribute('data-theme', 'light');
+      document.body.style.backgroundColor = '#f9fafb';
+      document.body.style.color = '#1f2937';
     }
-  }, [isDarkMode, colors]);
+  }, [isDarkMode]);
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', backgroundColor: colors.background, color: colors.text, display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        width: '100%',
+        backgroundColor: isDarkMode ? '#111827' : '#f9fafb',
+        color: isDarkMode ? '#f9fafb' : '#1f2937',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'background-color 0.2s ease, color 0.2s ease',
+      }}
+    >
+      {user && <NotificationManager />}
       <Routes>
         {!user ? (
           <>
@@ -89,11 +104,11 @@ export default function App() {
               <Route path="/mypayments" element={<MyPaymentsScreen />} />
               <Route path="/notifications" element={<NotificationsScreen />} />
               <Route path="/supporttickets" element={<SupportTicketListScreen />} />
+              <Route path="/resetpassword" element={<ResetPasswordScreen />} />
             </Route>
-            
+
             <Route path="/chapterplayer" element={<ChapterPlayerScreen />} />
             <Route path="/attachmentviewer" element={<AttachmentViewerScreen />} />
-            <Route path="/permission" element={<PermissionScreen />} />
             <Route path="/purchase" element={<PurchaseScreen />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </>

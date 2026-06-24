@@ -25,12 +25,42 @@ const formatTimeAgo = (dateString: string) => {
 
 const getIconConfig = (type: string = 'general') => {
   switch (type) {
-    case 'offer': return { colors: 'bg-gradient-to-br from-orange-500 to-orange-300', Icon: Gift };
-    case 'course_update': return { colors: 'bg-gradient-to-br from-indigo-600 to-blue-500', Icon: RefreshCcw };
-    case 'live_class': return { colors: 'bg-gradient-to-br from-rose-500 to-rose-400', Icon: Video };
-    case 'chat_reply': return { colors: 'bg-gradient-to-br from-purple-500 to-purple-400', Icon: MessageCircle };
-    case 'success': return { colors: 'bg-gradient-to-br from-lime-600 to-lime-500', Icon: CheckCircle2 };
-    default: return { colors: 'bg-gradient-to-br from-teal-600 to-teal-400', Icon: Info };
+    case 'offer':
+      return {
+        accentBg: 'bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400',
+        barColor: 'bg-orange-500',
+        Icon: Gift
+      };
+    case 'course_update':
+      return {
+        accentBg: 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400',
+        barColor: 'bg-indigo-600',
+        Icon: RefreshCcw
+      };
+    case 'live_class':
+      return {
+        accentBg: 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400',
+        barColor: 'bg-rose-500',
+        Icon: Video
+      };
+    case 'chat_reply':
+      return {
+        accentBg: 'bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400',
+        barColor: 'bg-purple-500',
+        Icon: MessageCircle
+      };
+    case 'success':
+      return {
+        accentBg: 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400',
+        barColor: 'bg-emerald-500',
+        Icon: CheckCircle2
+      };
+    default:
+      return {
+        accentBg: 'bg-sky-50 dark:bg-sky-950/20 text-sky-600 dark:text-sky-400',
+        barColor: 'bg-sky-500',
+        Icon: Info
+      };
   }
 };
 
@@ -149,12 +179,12 @@ export default function NotificationsScreen() {
 
   return (
     <div className={`flex flex-col min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-slate-50'}`}>
-      <div className={`flex flex-row items-center justify-between px-4 py-3 border-b ${isDarkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-black/5'}`}>
-        <button onClick={() => navigate(-1)} className="p-2 bg-transparent border-none cursor-pointer -ml-2">
-          <ChevronLeft size={24} className="text-text" />
+      <div className={`flex flex-row items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+        <button onClick={() => navigate(-1)} className="p-2 bg-transparent border-none cursor-pointer -ml-2 text-text hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors flex items-center justify-center">
+          <ChevronLeft size={24} />
         </button>
-        <h1 className="text-lg font-bold text-text m-0">Notifications</h1>
-        <button onClick={markAllRead} className="p-2 bg-transparent border-none cursor-pointer text-primary text-xs font-semibold">
+        <h1 className="text-xl font-bold text-text m-0 flex-1 ml-3">Notifications</h1>
+        <button onClick={markAllRead} className="px-4 py-2 bg-primary/10 hover:bg-primary/15 text-primary text-sm font-semibold rounded-lg border-none cursor-pointer transition-colors">
           Mark all read
         </button>
       </div>
@@ -164,55 +194,81 @@ export default function NotificationsScreen() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       ) : (
-        <div className="flex-1 p-4 pb-8 overflow-y-auto max-w-4xl mx-auto w-full">
+        <div className="flex-1 p-6 pb-12 overflow-y-auto max-w-3xl mx-auto w-full">
           {items.length > 0 ? (
             items.map(item => {
-              const { colors: cardColors, Icon } = getIconConfig(item.type);
+              const { accentBg, barColor, Icon } = getIconConfig(item.type);
               return (
                 <div 
                   key={item.id}
                   onClick={() => handlePress(item)}
-                  className={`mb-3 rounded-2xl shadow-md overflow-hidden cursor-pointer transition-opacity ${item.read ? 'opacity-80' : 'opacity-100'}`}
+                  className={`mb-4 rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer flex flex-row relative
+                    ${item.read 
+                      ? 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-800/80 opacity-75 hover:opacity-100 shadow-sm' 
+                      : 'bg-white dark:bg-gray-800 border-primary/20 dark:border-primary/30 shadow-[0_4px_16px_rgba(99,102,241,0.06)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.1)]'
+                    }`}
                 >
-                  <div className={`flex flex-row items-center p-4 rounded-2xl ${cardColors}`}>
-                    <div className="w-12 h-12 rounded-xl bg-white/20 flex justify-center items-center mr-4">
-                      <Icon size={24} color="#FFFFFF" />
+                  <div className={`w-1.5 self-stretch ${item.read ? 'bg-gray-200 dark:bg-gray-700' : barColor}`} />
+                  
+                  <div className="flex-1 flex flex-row items-start p-5 gap-4">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${accentBg}`}>
+                      <Icon size={20} />
                     </div>
 
-                    <div className="flex-1">
-                      <div className="flex flex-row justify-between items-center mb-1">
-                        <span className="text-base font-bold flex-1 mr-2 text-white truncate">{item.title}</span>
-                        <span className="text-xs font-medium text-white/80 whitespace-nowrap">{formatTimeAgo(item.created_at)}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-row items-center justify-between gap-2 mb-1.5">
+                        <span className={`text-base font-bold truncate ${item.read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-50'}`}>
+                          {item.title}
+                        </span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
+                            {formatTimeAgo(item.created_at)}
+                          </span>
+                          {!item.read && (
+                            <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 animate-pulse" />
+                          )}
+                        </div>
                       </div>
 
-                      <p className="text-[13px] leading-[18px] text-white/90 line-clamp-2 m-0">{item.message}</p>
+                      <p className={`text-sm leading-relaxed m-0 ${item.read ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
+                        {item.message}
+                      </p>
 
                       {!!item.image_url && (
-                        <div className="mt-2.5">
-                          <img src={item.image_url} className="w-full h-[140px] rounded-xl bg-white/15 border border-white/25 object-cover" alt="" />
+                        <div className="mt-4 rounded-xl overflow-hidden border border-gray-150 dark:border-gray-700/60 shadow-sm relative group max-w-full">
+                          <img 
+                            src={item.image_url} 
+                            className="w-full h-48 md:h-56 object-cover transform hover:scale-[1.02] transition-transform duration-300 ease-out" 
+                            alt={item.title} 
+                          />
                         </div>
                       )}
 
                       {item.offers && (
-                        <div className="flex flex-row mt-2">
-                          <div className="bg-white/20 px-2.5 py-1 rounded-lg">
-                            <span className="text-white text-xs font-bold">{item.offers.code} • {item.offers.discount_percentage}% OFF</span>
+                        <div className="flex flex-row mt-3">
+                          <div className="bg-orange-50 dark:bg-orange-950/30 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-orange-900/40 flex items-center gap-1.5">
+                            <Gift size={14} className="text-orange-500" />
+                            <span className="text-orange-600 dark:text-orange-400 text-xs font-bold uppercase tracking-wider">
+                              Code: {item.offers.code} • {item.offers.discount_percentage}% OFF
+                            </span>
                           </div>
                         </div>
                       )}
 
                       {!item.read && (
-                        <div className="mt-2 flex flex-row">
-                          <button onClick={(e) => { e.stopPropagation(); markAsRead(item); }} className="py-1 px-3 bg-white/20 rounded-xl border-none cursor-pointer hover:bg-white/30 transition-colors">
-                            <span className="text-xs font-semibold text-white m-0">Mark as read</span>
+                        <div className="mt-3.5 flex flex-row">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); markAsRead(item); }} 
+                            className="py-1.5 px-3.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800/80 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer transition-colors"
+                          >
+                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 m-0">Mark as read</span>
                           </button>
                         </div>
                       )}
                     </div>
 
-                    <div className="flex flex-col items-end justify-between h-full ml-2">
-                      {!item.read ? <div className="w-2.5 h-2.5 rounded-full bg-white mb-2" /> : <div className="h-2.5 mb-2" />}
-                      <ChevronRight size={20} className="text-white/70 my-auto" />
+                    <div className="flex items-center justify-center self-stretch pr-1 pl-1 text-gray-300 dark:text-gray-600 hover:text-gray-400 transition-colors">
+                      <ChevronRight size={20} />
                     </div>
                   </div>
                 </div>

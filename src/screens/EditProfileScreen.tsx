@@ -106,32 +106,35 @@ export default function EditProfileScreen() {
     <div className={`flex flex-col min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <Header title="Edit Profile" showBack={true} />
       
-      <div className="flex-1 overflow-y-auto px-5 pb-10 max-w-2xl mx-auto w-full">
-        <div className="flex flex-col items-center mt-6 mb-8">
-          <div className="relative">
-            <Avatar uri={profileImage} name={name || user?.name} size={100} />
-            <button
-              className={`absolute bottom-0 right-0 w-9 h-9 rounded-full flex justify-center items-center cursor-pointer border-2 ${isDarkMode ? 'bg-primary border-gray-900 text-white' : 'bg-primary border-white text-white'}`}
-              onClick={showImagePickerOptions}
-              disabled={uploadingImage}
-            >
-              {uploadingImage ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <Camera size={18} />
-              )}
-            </button>
+      <div className="flex-1 overflow-y-auto px-6 pb-12 max-w-2xl mx-auto w-full">
+        <div className="flex flex-col items-center mt-8 mb-10">
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-tr from-primary to-indigo-500 rounded-full blur opacity-20 group-hover:opacity-45 transition duration-300" />
+            <div className="relative">
+              <Avatar uri={profileImage} name={name || user?.name} size={104} />
+              <button
+                className={`absolute bottom-0 right-0 w-9 h-9 rounded-full flex justify-center items-center cursor-pointer border-2 transition-all hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-primary border-gray-900 text-white' : 'bg-primary border-white text-white shadow-md'}`}
+                onClick={showImagePickerOptions}
+                disabled={uploadingImage}
+              >
+                {uploadingImage ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <Camera size={16} />
+                )}
+              </button>
+            </div>
           </div>
-          <span className={`text-sm mt-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Tap to change photo</span>
+          <span className={`text-xs font-semibold mt-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Tap photo to change</span>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6">
           <div>
-            <span className={`text-sm font-semibold mb-2 block ml-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Full Name</span>
-            <div className={`flex flex-row items-center px-4 h-[52px] rounded-xl border ${isDarkMode ? 'bg-gray-800 border-gray-700 focus-within:border-primary' : 'bg-white border-gray-200 focus-within:border-primary focus-within:shadow-[0_0_0_4px_rgba(59,130,246,0.1)]'} transition-all`}>
-              <User size={20} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Full Name</span>
+            <div className={`flex flex-row items-center px-4 h-13 rounded-2xl border transition-all ${isDarkMode ? 'bg-gray-800 border-gray-700/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10' : 'bg-white border-gray-200 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/5'}`}>
+              <User size={18} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
               <input
-                className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base ${isDarkMode ? 'text-gray-50 placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+                className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base ${isDarkMode ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}`}
                 placeholder="Enter your full name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -140,24 +143,24 @@ export default function EditProfileScreen() {
           </div>
 
           <div>
-            <span className={`text-sm font-semibold mb-2 block ml-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Email Address</span>
-            <div className={`flex flex-row items-center px-4 h-[52px] rounded-xl border ${isDarkMode ? 'bg-gray-800 border-gray-700 opacity-70' : 'bg-gray-100 border-gray-200 opacity-80'}`}>
-              <Mail size={20} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Email Address</span>
+            <div className={`flex flex-row items-center px-4 h-13 rounded-2xl border ${isDarkMode ? 'bg-gray-800/50 border-gray-850 opacity-60' : 'bg-gray-100/80 border-gray-200 opacity-70'}`}>
+              <Mail size={18} className={isDarkMode ? 'text-gray-600' : 'text-gray-400'} />
               <input
-                className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}
+                className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base text-gray-500 dark:text-gray-500`}
                 value={email}
                 disabled
               />
             </div>
-            <span className={`text-xs mt-1 ml-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Email cannot be changed</span>
+            <span className={`text-[11px] font-medium mt-1.5 block ml-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Email address cannot be modified.</span>
           </div>
 
           <div>
-            <span className={`text-sm font-semibold mb-2 block ml-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Phone Number</span>
-            <div className={`flex flex-row items-center px-4 h-[52px] rounded-xl border ${isDarkMode ? 'bg-gray-800 border-gray-700 focus-within:border-primary' : 'bg-white border-gray-200 focus-within:border-primary focus-within:shadow-[0_0_0_4px_rgba(59,130,246,0.1)]'} transition-all`}>
-              <Phone size={20} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Phone Number</span>
+            <div className={`flex flex-row items-center px-4 h-13 rounded-2xl border transition-all ${isDarkMode ? 'bg-gray-800 border-gray-700/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10' : 'bg-white border-gray-200 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/5'}`}>
+              <Phone size={18} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
               <input
-                className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base ${isDarkMode ? 'text-gray-50 placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+                className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base ${isDarkMode ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}`}
                 placeholder="Enter your phone number"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -166,11 +169,11 @@ export default function EditProfileScreen() {
           </div>
 
           <div>
-            <span className={`text-sm font-semibold mb-2 block ml-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Profession</span>
-            <div className={`flex flex-row items-center px-4 h-[52px] rounded-xl border ${isDarkMode ? 'bg-gray-800 border-gray-700 focus-within:border-primary' : 'bg-white border-gray-200 focus-within:border-primary focus-within:shadow-[0_0_0_4px_rgba(59,130,246,0.1)]'} transition-all`}>
-              <Briefcase size={20} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Profession</span>
+            <div className={`flex flex-row items-center px-4 h-13 rounded-2xl border transition-all ${isDarkMode ? 'bg-gray-800 border-gray-700/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10' : 'bg-white border-gray-200 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/5'}`}>
+              <Briefcase size={18} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
               <input
-                className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base ${isDarkMode ? 'text-gray-50 placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+                className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base ${isDarkMode ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}`}
                 placeholder="Student, Developer, etc."
                 value={profession}
                 onChange={(e) => setProfession(e.target.value)}
@@ -180,16 +183,16 @@ export default function EditProfileScreen() {
         </div>
 
         <button
-          className={`w-full h-14 rounded-xl flex flex-row justify-center items-center gap-2 mt-10 shadow-[0_4px_12px_rgba(59,130,246,0.3)] border-none cursor-pointer transition-opacity ${loading ? 'opacity-80' : 'hover:opacity-90'} bg-primary`}
+          className={`w-full h-13 rounded-2xl flex flex-row justify-center items-center gap-2 mt-10 shadow-lg shadow-primary/25 hover:shadow-primary/35 border-none cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] bg-primary disabled:opacity-50 text-white`}
           onClick={handleSave}
           disabled={loading}
         >
           {loading ? (
-            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
             <>
-              <Check size={20} color="#fff" />
-              <span className="text-white text-base font-bold">Save Changes</span>
+              <Check size={18} />
+              <span className="text-base font-bold">Save Changes</span>
             </>
           )}
         </button>

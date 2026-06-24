@@ -66,7 +66,7 @@ export default function SignUpScreen() {
 
       <div className="flex-1 flex flex-col pt-16 overflow-y-auto max-w-md mx-auto w-full">
         <div className="flex flex-col items-center justify-center py-8 z-10">
-          <img src="/logo3.png" alt="EduOrbit" className="w-32 h-32 object-contain" onError={(e) => { e.currentTarget.src = '/vite.svg'; }} />
+          <img src="/logo.png" alt="EduOrbit" className="w-32 h-32 object-contain" onError={(e) => { e.currentTarget.src = '/logo3.png'; }} />
           <p className="text-blue-100 text-base mt-2 m-0">Bihar’s Digital Learning Revolution.</p>
         </div>
 

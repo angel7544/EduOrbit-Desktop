@@ -20,13 +20,13 @@ export default function OnboardingScreen() {
       setCurrentIndex(currentIndex + 1);
     } else {
       localStorage.setItem('hasOnboarded', 'true');
-      navigate('/permission', { replace: true });
+      navigate('/login', { replace: true });
     }
   };
 
   const handleSkip = () => {
     localStorage.setItem('hasOnboarded', 'true');
-    navigate('/permission', { replace: true });
+    navigate('/login', { replace: true });
   };
 
   const slide = SLIDES[currentIndex];

@@ -1,10 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FileText, ArrowLeft, ChevronLeft, ChevronRight, CheckCircle, Lock, Download, Play, Share2 } from 'lucide-react';
+import {
+  ArrowLeft, ChevronLeft, ChevronRight, CheckCircle2, Lock,
+  Play, Share2, BookOpen, Clock, CheckCheck, FileText
+} from 'lucide-react';
 import { ChapterItem, useCourseStore } from '../store/courseStore';
 import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../hooks/useTheme';
 import { supabase } from '../lib/supabase';
+import { VideoPlayer } from '../components/VideoPlayer';
 
 export default function ChapterPlayerScreen() {
   const location = useLocation();
@@ -20,11 +24,10 @@ export default function ChapterPlayerScreen() {
   const [courseTitle, setCourseTitle] = useState<string>(initialCourseTitle || '');
   const [hasAccess, setHasAccess] = useState<boolean>(initialHasAccess || false);
   const [loading, setLoading] = useState(!initialChapter);
+  const [markingComplete, setMarkingComplete] = useState(false);
 
   useEffect(() => {
-    if (user && courseId) {
-      loadProgress(courseId, user.id);
-    }
+    if (user && courseId) loadProgress(courseId, user.id);
   }, [courseId, user, loadProgress]);
 
   const isCompleted = useMemo(() => {
@@ -53,7 +56,7 @@ export default function ChapterPlayerScreen() {
           .select('*, chapters(*)')
           .eq('id', courseId)
           .single();
-        
+
         if (courseData) {
           setCurrentCourse(courseData);
           setCourseTitle(courseData.title);
@@ -71,7 +74,6 @@ export default function ChapterPlayerScreen() {
         } else if (initialHasAccess !== undefined) {
           setHasAccess(initialHasAccess);
         }
-
       } catch (e) {
         console.error('Error loading chapter data:', e);
       } finally {
@@ -94,6 +96,9 @@ export default function ChapterPlayerScreen() {
 
   const prevChapter = currentIndex > 0 ? sortedChapters[currentIndex - 1] : null;
   const nextChapter = currentIndex < sortedChapters.length - 1 ? sortedChapters[currentIndex + 1] : null;
+  const completedCount = progress[courseId]?.length || 0;
+  const totalCount = sortedChapters.length;
+  const overallProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const navigateToChapter = (chapter: any) => {
     if (!chapter.is_demo && !hasAccess) {
@@ -101,6 +106,14 @@ export default function ChapterPlayerScreen() {
       return;
     }
     setCurrentChapter(chapter);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleMarkComplete = async () => {
+    if (!user || !currentChapter || !hasAccess || isCompleted) return;
+    setMarkingComplete(true);
+    await markChapterCompleted(courseId, currentChapter.id, user.id);
+    setMarkingComplete(false);
   };
 
   const getYoutubeId = (url: string) => {
@@ -113,150 +126,360 @@ export default function ChapterPlayerScreen() {
   const renderVideoPlayer = () => {
     if (!currentChapter?.video_url) {
       return (
-        <div className={`w-full aspect-video flex justify-center items-center ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
-          <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>No video available</span>
+        <div className={`w-full aspect-video flex flex-col justify-center items-center gap-3 ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+          <BookOpen size={40} className="text-gray-400" />
+          <span className="text-gray-400 text-sm">No video available for this chapter</span>
         </div>
       );
     }
-
-    const ytId = getYoutubeId(currentChapter.video_url);
-    if (ytId) {
-      return (
-        <div className="w-full aspect-video bg-black">
-          <iframe 
-            src={`https://www.youtube.com/embed/${ytId}?autoplay=1`} 
-            className="w-full h-full border-none"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-            allowFullScreen 
-          />
-        </div>
-      );
-    }
-
-    // Default HTML5 video player for mp4, WebM, etc.
     return (
-      <div className="w-full aspect-video bg-black">
-        <video 
-          src={currentChapter.video_url} 
-          controls 
-          autoPlay 
-          className="w-full h-full"
-          onEnded={() => {
-            if (user && hasAccess) {
-              markChapterCompleted(courseId, currentChapter.id, user.id);
-            }
-          }}
-        />
-      </div>
+      <VideoPlayer
+        url={currentChapter.video_url}
+        isDarkMode={isDarkMode}
+        onEnded={() => {
+          if (user && hasAccess && !isCompleted) {
+            markChapterCompleted(courseId, currentChapter.id, user.id);
+          }
+        }}
+      />
     );
   };
 
+  const bg = isDarkMode ? '#0f172a' : '#f8fafc';
+  const cardBg = isDarkMode ? '#1e293b' : '#ffffff';
+  const border = isDarkMode ? '#334155' : '#e2e8f0';
+  const textPrimary = isDarkMode ? '#f1f5f9' : '#0f172a';
+  const textMuted = isDarkMode ? '#94a3b8' : '#64748b';
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            border: '3px solid transparent', borderTopColor: '#6366f1', borderRightColor: '#6366f1',
+            animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
+          }} />
+          <p style={{ color: textMuted, fontSize: 14 }}>Loading lesson...</p>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex flex-col min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      <div className="w-full max-w-[1600px] mx-auto flex flex-col lg:flex-row min-h-screen shadow-xl bg-inherit">
-        
-        {/* Left Side: Video Player */}
-        <div className="flex-[2.5] flex flex-col lg:border-r border-gray-200 dark:border-gray-800">
-          <div className="relative w-full aspect-video bg-black">
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', flexDirection: 'column' }}>
+
+      {/* ── Top Header Bar ── */}
+      <div style={{
+        background: isDarkMode ? '#0f172a' : '#ffffff',
+        borderBottom: `1px solid ${border}`,
+        padding: '0 20px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        height: 56, flexShrink: 0, position: 'sticky', top: 0, zIndex: 40,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      }}>
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}
+        >
+          <ArrowLeft size={18} color={textPrimary} />
+        </button>
+
+        <img src="/logo.png" alt="EduOrbit" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <p style={{ fontSize: 11, color: '#6366f1', fontWeight: 600, margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>{courseTitle}</p>
+          <p style={{ fontSize: 14, fontWeight: 700, color: textPrimary, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {currentChapter?.title}
+          </p>
+        </div>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+
+        {/* Left: Video + Info */}
+        <div style={{ flex: '2.5', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+
+          {/* Video Player */}
+          <div style={{ position: 'relative', background: '#000' }}>
             {renderVideoPlayer()}
-            <button 
-              className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/40 flex justify-center items-center border-none cursor-pointer hover:bg-black/60 transition-colors z-10"
-              onClick={() => navigate(-1)}
-            >
-              <ArrowLeft size={20} className="text-white" />
-            </button>
           </div>
 
-          <div className={`flex-1 p-5 lg:p-8 overflow-y-auto ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-            <div className="flex flex-row justify-between items-start mb-4 border-b pb-4" style={{ borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
-              <div>
-                <span className={`text-2xl font-bold mb-1 block ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{currentChapter?.title}</span>
-                <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{courseTitle}</span>
-              </div>
-              <div className="flex gap-3">
-                  <button className={`w-10 h-10 rounded-full flex justify-center items-center border-none cursor-pointer ${isDarkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} transition-colors`}>
-                      <Share2 size={18} className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} />
-                  </button>
-                  <button className={`w-10 h-10 rounded-full flex justify-center items-center border-none cursor-pointer ${isDarkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} transition-colors`}>
-                      <Download size={18} className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} />
-                  </button>
-              </div>
-            </div>
+          {/* Chapter info panel */}
+          <div style={{ padding: '24px 28px', background: cardBg, borderBottom: `1px solid ${border}` }}>
 
-            <div className="flex flex-row gap-4 mb-8">
-                <button 
-                    className={`flex-1 flex flex-row items-center justify-center py-4 rounded-xl border-none gap-2 ${prevChapter ? (isDarkMode ? 'bg-gray-800 cursor-pointer hover:bg-gray-700' : 'bg-white shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50') : 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500'} transition-colors`}
-                    onClick={() => prevChapter && navigateToChapter(prevChapter)}
-                    disabled={!prevChapter}
-                >
-                    <ChevronLeft size={20} className={isDarkMode ? 'text-gray-300' : 'text-gray-600'} />
-                    <span className={`text-base font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Previous Lesson</span>
-                </button>
-                <button 
-                    className={`flex-1 flex flex-row items-center justify-center py-4 rounded-xl border-none gap-2 ${nextChapter ? (isDarkMode ? 'bg-gray-800 cursor-pointer hover:bg-gray-700' : 'bg-white shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50') : 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500'} transition-colors`}
-                    onClick={() => nextChapter && navigateToChapter(nextChapter)}
-                    disabled={!nextChapter}
-                >
-                    <span className={`text-base font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Next Lesson</span>
-                    <ChevronRight size={20} className={isDarkMode ? 'text-gray-300' : 'text-gray-600'} />
-                </button>
-            </div>
-
-            {currentChapter?.description && (
-                <div className="mb-6">
-                    <span className={`text-lg font-bold mb-4 block ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>Description</span>
-                    <p className={`text-base leading-7 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{currentChapter.description}</p>
+            {/* Chapter title + badge */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1,
+                    color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 6,
+                  }}>
+                    Lesson {currentIndex + 1} of {totalCount}
+                  </span>
+                  {isCompleted && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+                      color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: 6,
+                      display: 'flex', alignItems: 'center', gap: 3,
+                    }}>
+                      <CheckCircle2 size={10} /> Completed
+                    </span>
+                  )}
                 </div>
-            )}
+                <h2 style={{ fontSize: 22, fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.3 }}>
+                  {currentChapter?.title}
+                </h2>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: textMuted }}>{completedCount}/{totalCount} lessons completed</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
+              </div>
+              <div style={{ height: 6, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99 }}>
+                <div style={{
+                  height: '100%', width: `${overallProgress}%`,
+                  background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                  borderRadius: 99, transition: 'width 0.4s ease',
+                }} />
+              </div>
+            </div>
+
+            {/* Mark Complete + Nav buttons */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              {hasAccess && (
+                <button
+                  onClick={handleMarkComplete}
+                  disabled={isCompleted || markingComplete}
+                  style={{
+                    flex: 1, padding: '12px 16px', borderRadius: 12, border: 'none', cursor: isCompleted ? 'default' : 'pointer',
+                    background: isCompleted
+                      ? (isDarkMode ? 'rgba(16,185,129,0.15)' : '#d1fae5')
+                      : 'linear-gradient(135deg, #10b981, #059669)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {markingComplete
+                    ? <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                    : <CheckCheck size={16} color={isCompleted ? '#10b981' : '#fff'} />
+                  }
+                  <span style={{
+                    fontSize: 14, fontWeight: 700,
+                    color: isCompleted ? '#10b981' : '#fff',
+                  }}>
+                    {markingComplete ? 'Marking...' : isCompleted ? 'Completed ✓' : 'Mark Complete'}
+                  </span>
+                </button>
+              )}
+
+              <button
+                onClick={() => prevChapter && navigateToChapter(prevChapter)}
+                disabled={!prevChapter}
+                style={{
+                  padding: '12px 16px', borderRadius: 12,
+                  border: `1px solid ${border}`,
+                  background: prevChapter ? cardBg : (isDarkMode ? '#1e293b' : '#f1f5f9'),
+                  cursor: prevChapter ? 'pointer' : 'not-allowed',
+                  opacity: prevChapter ? 1 : 0.5,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  transition: 'all 0.2s',
+                }}
+              >
+                <ChevronLeft size={18} color={textMuted} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: textMuted, whiteSpace: 'nowrap' }}>Prev</span>
+              </button>
+
+              <button
+                onClick={() => nextChapter && navigateToChapter(nextChapter)}
+                disabled={!nextChapter}
+                style={{
+                  padding: '12px 16px', borderRadius: 12,
+                  border: `1px solid ${border}`,
+                  background: nextChapter
+                    ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+                    : (isDarkMode ? '#1e293b' : '#f1f5f9'),
+                  cursor: nextChapter ? 'pointer' : 'not-allowed',
+                  opacity: nextChapter ? 1 : 0.5,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  transition: 'all 0.2s',
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600, color: nextChapter ? '#fff' : textMuted, whiteSpace: 'nowrap' }}>Next</span>
+                <ChevronRight size={18} color={nextChapter ? '#fff' : textMuted} />
+              </button>
+            </div>
           </div>
+
+          {/* Description */}
+          {currentChapter?.description && (
+            <div style={{ padding: '24px 28px', background: bg }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>About this lesson</h3>
+              <p style={{ fontSize: 15, color: textMuted, lineHeight: 1.8, margin: 0 }}>{currentChapter.description}</p>
+            </div>
+          )}
+
+          {/* Lesson Resources / Attachments */}
+          {currentChapter?.attachments && currentChapter.attachments.length > 0 && (
+            <div style={{ padding: '24px 28px', background: bg, borderTop: `1px solid ${border}` }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>Lesson Resources</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {currentChapter.attachments.map((att: any) => {
+                  const isAssignment = att.title?.toLowerCase().includes('assignment') || att.name?.toLowerCase().includes('assignment');
+                  
+                  return (
+                    <div
+                      key={att.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: 12, borderRadius: 12, border: `1px solid ${border}`,
+                        background: cardBg
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <FileText size={18} color="#6366f1" />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>{att.title}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => navigate('/attachmentviewer', { state: { url: att.file_url, title: att.title, type: att.file_type } })}
+                          style={{
+                            padding: '6px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                            background: '#6366f1', color: '#fff', fontSize: 12, fontWeight: 600
+                          }}
+                        >
+                          View
+                        </button>
+                        {isAssignment && (
+                          <button
+                            onClick={() => window.open(att.file_url, '_blank')}
+                            style={{
+                              padding: '6px 12px', borderRadius: 8, border: `1px solid #6366f1`, cursor: 'pointer',
+                              background: 'transparent', color: '#6366f1', fontSize: 12, fontWeight: 600
+                            }}
+                          >
+                            Download
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right Side: Playlist Sidebar */}
-        <div className={`flex-[1] flex flex-col h-auto lg:max-h-screen overflow-y-auto ${isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
-          <div className="p-6">
-              <span className={`text-xl font-bold mb-6 block ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>Course Playlist ({sortedChapters.length} lessons)</span>
-                  <div className={`rounded-xl overflow-hidden border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
-                      {sortedChapters.map((ch: any, idx: number) => {
-                          const isActive = ch.id === currentChapter?.id;
-                          const isDone = progress[courseId]?.includes(ch.id);
-                          const isLocked = !ch.is_demo && !hasAccess;
-                          
-                          return (
-                              <button
-                                  key={ch.id}
-                                  className={`w-full flex flex-row items-center p-4 border-b border-solid text-left cursor-pointer transition-colors border-none ${isActive ? (isDarkMode ? 'bg-primary/20' : 'bg-primary/5') : 'bg-transparent'} ${isDarkMode ? 'border-gray-700' : 'border-gray-100'} ${isLocked ? 'opacity-60' : 'hover:opacity-80'}`}
-                                  onClick={() => navigateToChapter(ch)}
-                                  disabled={isLocked}
-                              >
-                                  <div className={`w-8 h-8 rounded-full flex justify-center items-center mr-3 shrink-0 ${isActive ? 'bg-primary text-white' : (isDone ? 'bg-green-100 text-green-600' : (isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'))}`}>
-                                      {isDone && !isActive ? (
-                                          <CheckCircle size={16} className="currentColor" />
-                                      ) : isActive ? (
-                                          <Play size={14} className="currentColor" fill="currentColor" />
-                                      ) : (
-                                          <span className="text-xs font-bold currentColor">{idx + 1}</span>
-                                      )}
-                                  </div>
-                                  
-                                  <div className="flex-1 min-w-0 pr-3">
-                                      <span className={`text-sm font-semibold truncate block ${isActive ? 'text-primary' : (isDarkMode ? 'text-gray-200' : 'text-gray-800')}`}>{ch.title}</span>
-                                      <span className={`text-xs mt-0.5 block truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                                          Video
-                                      </span>
-                                  </div>
-                                  
-                                  {isLocked ? (
-                                      <Lock size={16} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
-                                  ) : (
-                                      <Play size={16} className={isActive ? 'text-primary' : (isDarkMode ? 'text-gray-500' : 'text-gray-400')} />
-                                  )}
-                              </button>
-                          );
-                      })}
+        {/* Right: Playlist Sidebar */}
+        <div style={{
+          width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column',
+          borderLeft: `1px solid ${border}`,
+          background: isDarkMode ? '#1e293b' : '#f8fafc',
+          height: 'calc(100vh - 56px)', overflowY: 'auto', position: 'sticky', top: 56,
+        }}>
+          {/* Playlist header */}
+          <div style={{
+            padding: '16px 20px', borderBottom: `1px solid ${border}`,
+            background: isDarkMode ? '#0f172a' : '#fff', position: 'sticky', top: 0, zIndex: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: textPrimary }}>Course Playlist</span>
+              <span style={{ fontSize: 12, color: textMuted }}>{totalCount} lessons</span>
+            </div>
+            {/* mini progress */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, height: 4, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99 }}>
+                <div style={{ height: '100%', width: `${overallProgress}%`, background: 'linear-gradient(90deg, #6366f1, #8b5cf6)', borderRadius: 99 }} />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
+            </div>
+          </div>
+
+          {/* Chapter list */}
+          <div>
+            {sortedChapters.map((ch: any, idx: number) => {
+              const isActive = ch.id === currentChapter?.id;
+              const isDone = progress[courseId]?.includes(ch.id);
+              const isLocked = !ch.is_demo && !hasAccess;
+
+              return (
+                <button
+                  key={ch.id}
+                  onClick={() => navigateToChapter(ch)}
+                  disabled={isLocked}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 16px',
+                    background: isActive
+                      ? (isDarkMode ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)')
+                      : 'transparent',
+                    borderLeft: isActive ? '3px solid #6366f1' : '3px solid transparent',
+                    border: 'none', cursor: isLocked ? 'not-allowed' : 'pointer',
+                    opacity: isLocked ? 0.5 : 1,
+                    textAlign: 'left',
+                    transition: 'all 0.15s',
+                    borderBottom: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
+                  }}
+                >
+                  {/* Status icon */}
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: isActive ? '#6366f1' : isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                  }}>
+                    {isLocked
+                      ? <Lock size={13} color={textMuted} />
+                      : isActive
+                        ? <Play size={12} color="#fff" fill="#fff" />
+                        : isDone
+                          ? <CheckCircle2 size={14} color="#10b981" />
+                          : <span style={{ fontSize: 11, fontWeight: 700, color: textMuted }}>{idx + 1}</span>
+                    }
                   </div>
+
+                  {/* Chapter info */}
+                  <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <p style={{
+                      fontSize: 13, fontWeight: isActive ? 700 : 500,
+                      color: isActive ? '#6366f1' : textPrimary,
+                      margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {ch.title}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <Clock size={10} color={textMuted} />
+                      <span style={{ fontSize: 11, color: textMuted }}>
+                        {ch.duration ? `${Math.floor(ch.duration / 60)}m ${ch.duration % 60}s` : 'Video'}
+                      </span>
+                      {ch.is_demo && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, color: '#10b981',
+                          background: 'rgba(16,185,129,0.12)', padding: '1px 5px', borderRadius: 4, marginLeft: 4,
+                        }}>FREE</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
