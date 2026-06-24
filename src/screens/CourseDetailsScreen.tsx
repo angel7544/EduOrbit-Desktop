@@ -11,6 +11,8 @@ import { formatDuration, currencyFormater, renderMarkdownAndHTML } from '../lib/
 import { Header } from '../components/Header';
 import { useTheme } from '../hooks/useTheme';
 import { supabase } from '../lib/supabase';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 
 export default function CourseDetailsScreen() {
     const { isDarkMode } = useTheme();
@@ -510,9 +512,16 @@ export default function CourseDetailsScreen() {
                                                                 </span>
                                                             )}
                                                         </span>
-                                                        <div className="flex flex-row items-center mt-1">
+                                                        <div className="flex flex-row items-center mt-1 mb-1">
                                                             <span className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Video • {formatDuration(chapter.duration || 0)}</span>
                                                         </div>
+                                                        {chapter.description && (
+                                                            <div className={`text-xs mt-1 line-clamp-2 pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                                <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                                                                    {chapter.description}
+                                                                </ReactMarkdown>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     {isExpanded ? (
                                                         <ChevronUp size={18} className={isDarkMode ? 'text-gray-400' : 'text-gray-500'} />
@@ -523,9 +532,13 @@ export default function CourseDetailsScreen() {
 
                                                 {isExpanded && (
                                                     <div className={`p-4 pt-0 ${isDarkMode ? 'bg-gray-800/20' : 'bg-gray-5'}`}>
-                                                        <p className={`text-xs leading-relaxed mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                                                            {chapter.description || 'In this lesson, we will cover the foundational concepts related to this topic.'}
-                                                        </p>
+                                                        <div className={`text-xs leading-relaxed mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                                            {chapter.description ? (
+                                                                <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                                                                    {chapter.description}
+                                                                </ReactMarkdown>
+                                                            ) : 'In this lesson, we will cover the foundational concepts related to this topic.'}
+                                                        </div>
                                                         <button
                                                             className={`w-full py-2.5 rounded-xl flex flex-row justify-center items-center gap-2 border-none transition-all duration-300 font-extrabold text-xs uppercase tracking-wider cursor-pointer ${isEnrolled && !isExpired ? 'bg-primary/10 text-primary hover:bg-primary/15' : (isDarkMode ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-500 cursor-not-allowed')}`}
                                                             onClick={() => {

@@ -9,6 +9,9 @@ import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../hooks/useTheme';
 import { supabase } from '../lib/supabase';
 import { VideoPlayer } from '../components/VideoPlayer';
+import {Header} from '../components/Header';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 
 export default function ChapterPlayerScreen() {
   const location = useLocation();
@@ -132,17 +135,7 @@ export default function ChapterPlayerScreen() {
         </div>
       );
     }
-    return (
-      <VideoPlayer
-        url={currentChapter.video_url}
-        isDarkMode={isDarkMode}
-        onEnded={() => {
-          if (user && hasAccess && !isCompleted) {
-            markChapterCompleted(courseId, currentChapter.id, user.id);
-          }
-        }}
-      />
-    );
+    return null; // Now rendered directly
   };
 
   const bg = isDarkMode ? '#0f172a' : '#f8fafc';
@@ -168,52 +161,41 @@ export default function ChapterPlayerScreen() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', flexDirection: 'column' }}>
-
-      {/* ── Top Header Bar ── */}
-      <div style={{
-        background: isDarkMode ? '#0f172a' : '#ffffff',
-        borderBottom: `1px solid ${border}`,
-        padding: '0 20px',
-        display: 'flex', alignItems: 'center', gap: 12,
-        height: 56, flexShrink: 0, position: 'sticky', top: 0, zIndex: 40,
-        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-      }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer',
-            background: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}
-        >
-          <ArrowLeft size={18} color={textPrimary} />
-        </button>
-
-        <img src="/logo.png" alt="EduOrbit" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <p style={{ fontSize: 11, color: '#6366f1', fontWeight: 600, margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>{courseTitle}</p>
-          <p style={{ fontSize: 14, fontWeight: 700, color: textPrimary, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {currentChapter?.title}
-          </p>
-        </div>
-      </div>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', flexDirection: 'column' }} onContextMenu={(e) => e.preventDefault()}>
+      <Header 
+        showBack={true} 
+        title={currentChapter?.title} 
+        subtitle={courseTitle} 
+        showLogo={true} 
+      />
 
       {/* ── Main Content ── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
 
         {/* Left: Video + Info */}
-        <div style={{ flex: '2.5', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div style={{ flex: '2.5', display: 'flex', flexDirection: 'column', overflowY: 'auto', borderRight: `1px solid ${border}` }}>
 
           {/* Video Player */}
-          <div style={{ position: 'relative', background: '#000' }}>
-            {renderVideoPlayer()}
+          <div style={{ position: 'relative', background: '#000', flexShrink: 0, maxHeight: '65vh' }}>
+            <VideoPlayer
+              url={currentChapter?.video_url || ''}
+              isDarkMode={isDarkMode}
+              onEnded={() => {
+                if (user && hasAccess && !isCompleted) {
+                  handleMarkComplete();
+                }
+              }}
+              hasPrev={!!prevChapter}
+              hasNext={!!nextChapter}
+              onPrev={() => prevChapter && navigateToChapter(prevChapter)}
+              onNext={() => nextChapter && navigateToChapter(nextChapter)}
+              isCompleted={isCompleted}
+              onMarkComplete={hasAccess ? handleMarkComplete : undefined}
+            />
           </div>
 
           {/* Chapter info panel */}
-          <div style={{ padding: '24px 28px', background: cardBg, borderBottom: `1px solid ${border}` }}>
+          <div style={{ padding: '20px 28px', background: cardBg, borderBottom: `1px solid ${border}` }}>
 
             {/* Chapter title + badge */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
@@ -256,77 +238,17 @@ export default function ChapterPlayerScreen() {
               </div>
             </div>
 
-            {/* Mark Complete + Nav buttons */}
-            <div style={{ display: 'flex', gap: 10 }}>
-              {hasAccess && (
-                <button
-                  onClick={handleMarkComplete}
-                  disabled={isCompleted || markingComplete}
-                  style={{
-                    flex: 1, padding: '12px 16px', borderRadius: 12, border: 'none', cursor: isCompleted ? 'default' : 'pointer',
-                    background: isCompleted
-                      ? (isDarkMode ? 'rgba(16,185,129,0.15)' : '#d1fae5')
-                      : 'linear-gradient(135deg, #10b981, #059669)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  {markingComplete
-                    ? <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                    : <CheckCheck size={16} color={isCompleted ? '#10b981' : '#fff'} />
-                  }
-                  <span style={{
-                    fontSize: 14, fontWeight: 700,
-                    color: isCompleted ? '#10b981' : '#fff',
-                  }}>
-                    {markingComplete ? 'Marking...' : isCompleted ? 'Completed ✓' : 'Mark Complete'}
-                  </span>
-                </button>
-              )}
-
-              <button
-                onClick={() => prevChapter && navigateToChapter(prevChapter)}
-                disabled={!prevChapter}
-                style={{
-                  padding: '12px 16px', borderRadius: 12,
-                  border: `1px solid ${border}`,
-                  background: prevChapter ? cardBg : (isDarkMode ? '#1e293b' : '#f1f5f9'),
-                  cursor: prevChapter ? 'pointer' : 'not-allowed',
-                  opacity: prevChapter ? 1 : 0.5,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  transition: 'all 0.2s',
-                }}
-              >
-                <ChevronLeft size={18} color={textMuted} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: textMuted, whiteSpace: 'nowrap' }}>Prev</span>
-              </button>
-
-              <button
-                onClick={() => nextChapter && navigateToChapter(nextChapter)}
-                disabled={!nextChapter}
-                style={{
-                  padding: '12px 16px', borderRadius: 12,
-                  border: `1px solid ${border}`,
-                  background: nextChapter
-                    ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-                    : (isDarkMode ? '#1e293b' : '#f1f5f9'),
-                  cursor: nextChapter ? 'pointer' : 'not-allowed',
-                  opacity: nextChapter ? 1 : 0.5,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  transition: 'all 0.2s',
-                }}
-              >
-                <span style={{ fontSize: 13, fontWeight: 600, color: nextChapter ? '#fff' : textMuted, whiteSpace: 'nowrap' }}>Next</span>
-                <ChevronRight size={18} color={nextChapter ? '#fff' : textMuted} />
-              </button>
-            </div>
           </div>
 
           {/* Description */}
           {currentChapter?.description && (
             <div style={{ padding: '24px 28px', background: bg }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>About this lesson</h3>
-              <p style={{ fontSize: 15, color: textMuted, lineHeight: 1.8, margin: 0 }}>{currentChapter.description}</p>
+              <div style={{ fontSize: 15, color: textMuted, lineHeight: 1.8, margin: 0 }}>
+                <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                  {currentChapter.description}
+                </ReactMarkdown>
+              </div>
             </div>
           )}
 
@@ -383,10 +305,9 @@ export default function ChapterPlayerScreen() {
 
         {/* Right: Playlist Sidebar */}
         <div style={{
-          width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column',
-          borderLeft: `1px solid ${border}`,
+          width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column',
           background: isDarkMode ? '#1e293b' : '#f8fafc',
-          height: 'calc(100vh - 56px)', overflowY: 'auto', position: 'sticky', top: 56,
+          overflowY: 'auto'
         }}>
           {/* Playlist header */}
           <div style={{
