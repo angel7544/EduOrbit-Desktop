@@ -177,6 +177,10 @@ export default function NotificationsScreen() {
     }
   };
 
+  const clearAll = () => {
+    setItems([]);
+  };
+
   return (
     <div className={`flex flex-col min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-slate-50'}`}>
       <div className={`flex flex-row items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
@@ -184,9 +188,14 @@ export default function NotificationsScreen() {
           <ChevronLeft size={24} />
         </button>
         <h1 className="text-xl font-bold text-text m-0 flex-1 ml-3">Notifications</h1>
-        <button onClick={markAllRead} className="px-4 py-2 bg-primary/10 hover:bg-primary/15 text-primary text-sm font-semibold rounded-lg border-none cursor-pointer transition-colors">
-          Mark all read
-        </button>
+        <div className="flex gap-3">
+          <button onClick={clearAll} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-sm font-semibold rounded-lg border-none cursor-pointer transition-colors">
+            Clear all
+          </button>
+          <button onClick={markAllRead} className="px-4 py-2 bg-primary/10 hover:bg-primary/15 text-primary text-sm font-semibold rounded-lg border-none cursor-pointer transition-colors">
+            Mark all read
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -194,33 +203,36 @@ export default function NotificationsScreen() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       ) : (
-        <div className="flex-1 p-6 pb-12 overflow-y-auto max-w-3xl mx-auto w-full">
+        <div className="flex-1 p-6 pb-12 overflow-y-auto max-w-7xl mx-auto w-full">
           {items.length > 0 ? (
-            items.map(item => {
-              const { accentBg, barColor, Icon } = getIconConfig(item.type);
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {items.map(item => {
+                const { accentBg, barColor, Icon } = getIconConfig(item.type);
               return (
                 <div 
                   key={item.id}
                   onClick={() => handlePress(item)}
-                  className={`mb-4 rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer flex flex-row relative
+                  className={`rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer flex flex-col h-full relative
                     ${item.read 
                       ? 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-800/80 opacity-75 hover:opacity-100 shadow-sm' 
                       : 'bg-white dark:bg-gray-800 border-primary/20 dark:border-primary/30 shadow-[0_4px_16px_rgba(99,102,241,0.06)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.1)]'
                     }`}
                 >
-                  <div className={`w-1.5 self-stretch ${item.read ? 'bg-gray-200 dark:bg-gray-700' : barColor}`} />
+                  <div className={`h-1.5 w-full ${item.read ? 'bg-gray-200 dark:bg-gray-700' : barColor}`} />
                   
-                  <div className="flex-1 flex flex-row items-start p-5 gap-4">
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${accentBg}`}>
-                      <Icon size={20} />
-                    </div>
+                  <div className="flex-1 flex flex-col p-5 gap-4">
+                    <div className="flex flex-row items-start gap-4">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${accentBg}`}>
+                        <Icon size={20} />
+                      </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-row items-center justify-between gap-2 mb-1.5">
-                        <span className={`text-base font-bold truncate ${item.read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-50'}`}>
-                          {item.title}
-                        </span>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-row items-center justify-between gap-2 mb-1.5">
+                          <span className={`text-base font-bold truncate ${item.read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-50'}`}>
+                            {item.title}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
                             {formatTimeAgo(item.created_at)}
                           </span>
@@ -229,7 +241,9 @@ export default function NotificationsScreen() {
                           )}
                         </div>
                       </div>
+                    </div>
 
+                    <div className="flex-1">
                       <p className={`text-sm leading-relaxed m-0 ${item.read ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
                         {item.message}
                       </p>
@@ -238,25 +252,28 @@ export default function NotificationsScreen() {
                         <div className="mt-4 rounded-xl overflow-hidden border border-gray-150 dark:border-gray-700/60 shadow-sm relative group max-w-full">
                           <img 
                             src={item.image_url} 
-                            className="w-full h-48 md:h-56 object-cover transform hover:scale-[1.02] transition-transform duration-300 ease-out" 
+                            className="w-full h-32 object-cover transform hover:scale-[1.02] transition-transform duration-300 ease-out" 
                             alt={item.title} 
                           />
                         </div>
                       )}
 
                       {item.offers && (
-                        <div className="flex flex-row mt-3">
-                          <div className="bg-orange-50 dark:bg-orange-950/30 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-orange-900/40 flex items-center gap-1.5">
+                        <div className="flex flex-row mt-3" onClick={(e) => { 
+                          e.stopPropagation(); 
+                          navigator.clipboard.writeText(item.offers.code);
+                          alert('Coupon code copied to clipboard!');
+                        }}>
+                          <div className="bg-orange-50 dark:bg-orange-950/30 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-orange-900/40 flex items-center gap-1.5 hover:bg-orange-100 dark:hover:bg-orange-900/60 transition-colors">
                             <Gift size={14} className="text-orange-500" />
                             <span className="text-orange-600 dark:text-orange-400 text-xs font-bold uppercase tracking-wider">
-                              Code: {item.offers.code} • {item.offers.discount_percentage}% OFF
+                              Code: {item.offers.code} • {item.offers.discount_percentage}% OFF (Click to copy)
                             </span>
                           </div>
                         </div>
                       )}
-
                       {!item.read && (
-                        <div className="mt-3.5 flex flex-row">
+                        <div className="mt-auto pt-3 flex flex-row">
                           <button 
                             onClick={(e) => { e.stopPropagation(); markAsRead(item); }} 
                             className="py-1.5 px-3.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800/80 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer transition-colors"
@@ -266,14 +283,11 @@ export default function NotificationsScreen() {
                         </div>
                       )}
                     </div>
-
-                    <div className="flex items-center justify-center self-stretch pr-1 pl-1 text-gray-300 dark:text-gray-600 hover:text-gray-400 transition-colors">
-                      <ChevronRight size={20} />
-                    </div>
                   </div>
                 </div>
-              )
-            })
+              );
+            })}
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center pt-20 px-8">
               <div className={`w-[100px] h-[100px] rounded-full flex justify-center items-center mb-6 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>

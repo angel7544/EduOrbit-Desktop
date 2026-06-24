@@ -104,6 +104,15 @@ export default function DashboardScreen() {
     }
   }, [unpurchasedFeaturedCourses.length, currentSlide]);
 
+  // Auto-slide featured courses
+  useEffect(() => {
+    if (unpurchasedFeaturedCourses.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % unpurchasedFeaturedCourses.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [unpurchasedFeaturedCourses.length]);
+
   useEffect(() => {
     if (user && myCourses.length > 0) {
       myCourses.forEach(course => { if (loadProgress) loadProgress(course.id, user.id); });
@@ -279,15 +288,9 @@ export default function DashboardScreen() {
       .channel('public:notifications:dashboard')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications' },
-        (payload) => {
-          const newNotif = payload.new as any;
-          const enrolledIds = new Set(myCourses.map(c => c.id));
-          if (newNotif.user_id && newNotif.user_id !== user.id) return;
-
-          if (!newNotif.course_id || newNotif.type === 'offer' || newNotif.type === 'general' || newNotif.type === 'system' || newNotif.type === 'user' || enrolledIds.has(newNotif.course_id)) {
-            setNotifications(prev => [newNotif, ...prev].slice(0, 4));
-          }
+        { event: '*', schema: 'public', table: 'notifications' },
+        () => {
+          fetchNotifications();
         }
       )
       .subscribe();
