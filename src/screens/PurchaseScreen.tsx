@@ -530,17 +530,18 @@ export default function PurchaseScreen() {
       {/* ── Sticky Pay Button ── */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        padding: '16px 20px',
         background: isDarkMode
           ? 'rgba(15,15,26,0.95)'
           : 'rgba(255,255,255,0.95)',
         backdropFilter: 'blur(12px)',
         borderTop: `1px solid ${cardBorder}`,
-        maxWidth: 640, margin: '0 auto',
-        left: '50%', transform: 'translateX(-50%)',
-        width: '100%',
-        boxSizing: 'border-box',
+        zIndex: 50,
       }}>
+        <div style={{
+          maxWidth: 640, margin: '0 auto',
+          padding: '16px 20px',
+          boxSizing: 'border-box',
+        }}>
         <button
           id="pay-now-btn"
           style={{
@@ -585,6 +586,7 @@ export default function PurchaseScreen() {
         <p style={{ textAlign: 'center', fontSize: 11, color: textMuted, margin: '8px 0 0' }}>
           Powered by Razorpay · UPI · Cards · Net Banking
         </p>
+        </div>{/* end inner max-width wrapper */}
       </div>
 
       <style>{`
