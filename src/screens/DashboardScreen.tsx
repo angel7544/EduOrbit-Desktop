@@ -494,14 +494,42 @@ export default function DashboardScreen() {
         {/* ═══ LEFT COLUMN ═══ */}
         <div style={{ flex: 1, minWidth: 0, padding: '28px 28px 40px' }}>
 
-          {/* Welcome */}
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ fontSize: 26, fontWeight: 800, color: textPrimary, margin: 0, letterSpacing: '-0.4px' }}>
-              {getGreeting()}, {user?.name?.split(' ')[0] || 'Learner'} 👋
-            </h2>
-            <p style={{ fontSize: 14, color: textMuted, margin: '4px 0 0' }}>
-              Let's continue your learning journey today.
-            </p>
+          {/* Welcome & Progress */}
+          <div style={{ 
+            marginBottom: 24, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            background: isDarkMode ? '#1e293b' : '#ffffff',
+            padding: '24px',
+            borderRadius: '20px',
+            border: `1px solid ${border}`,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+          }}>
+            <div>
+              <h2 style={{ fontSize: 26, fontWeight: 800, color: textPrimary, margin: 0, letterSpacing: '-0.4px' }}>
+                {getGreeting()}, {user?.name?.split(' ')[0] || 'Learner'} 👋
+              </h2>
+              <p style={{ fontSize: 14, color: textMuted, margin: '6px 0 0' }}>
+                Let's continue your learning journey today.
+              </p>
+            </div>
+            
+            <div style={{ minWidth: '220px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: textPrimary }}>Overall Progress</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#6366f1' }}>{combinedProgress}%</span>
+              </div>
+              <div style={{ width: '100%', height: '8px', background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
+                <div style={{ 
+                  width: `${combinedProgress}%`, 
+                  height: '100%', 
+                  background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                  borderRadius: '10px',
+                  transition: 'width 1s ease-out'
+                }} />
+              </div>
+            </div>
           </div>
 
           {/* ── Stats Cards ── */}
