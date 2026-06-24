@@ -151,9 +151,9 @@ export const NotificationManager = () => {
       }
     } else if (modalData?.type === 'chat_reply') {
       if (modalData.chat_id) {
-        navigate('/chatdetail', { state: { chatId: modalData.chat_id } });
+        navigate('/supporttickets', { state: { chatId: modalData.chat_id } });
       } else {
-        navigate('/chatsupport');
+        navigate('/supporttickets');
       }
     } else if (modalData?.offer_id) {
       navigate('/coupons', { state: { offerId: modalData.offer_id } });

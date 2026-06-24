@@ -24,7 +24,6 @@ import AboutUsScreen from './screens/AboutUsScreen';
 import AttachmentViewerScreen from './screens/AttachmentViewerScreen';
 import CertificatesScreen from './screens/CertificatesScreen';
 import ChatScreen from './screens/ChatScreen';
-import ChatSupportScreen from './screens/ChatSupportScreen';
 import CouponsScreen from './screens/CouponsScreen';
 import MyAnalyticsScreen from './screens/MyAnalyticsScreen';
 import MyPaymentsScreen from './screens/MyPaymentsScreen';
@@ -104,7 +103,6 @@ export default function App() {
               <Route path="/aboutus" element={<AboutUsScreen />} />
               <Route path="/certificates" element={<CertificatesScreen />} />
               <Route path="/chatdetail" element={<ChatScreen />} />
-              <Route path="/chatsupport" element={<ChatSupportScreen />} />
               <Route path="/coupons" element={<CouponsScreen />} />
               <Route path="/myanalytics" element={<MyAnalyticsScreen />} />
               <Route path="/mypayments" element={<MyPaymentsScreen />} />

@@ -284,8 +284,9 @@ export default function DashboardScreen() {
   // Realtime notification subscriptions on dashboard
   useEffect(() => {
     if (!user) return;
+    const channelId = `dash_n_${user.id}`;
     const channel = supabase
-      .channel('public:notifications:dashboard')
+      .channel(channelId)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications' },

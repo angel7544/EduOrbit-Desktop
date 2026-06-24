@@ -1,15 +1,17 @@
-import { useNavigate, useLocation } from 'react-router-dom';
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, Send, Search, X, Lock, Unlock, Reply, PlusCircle, Paperclip } from 'lucide-react';
+import { ChevronLeft, Send, Search, X, Lock, Unlock, Reply, PlusCircle, Paperclip, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../hooks/useTheme';
 import { Header } from '../components/Header';
 
-export default function ChatSupportScreen() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const route = { params: location.state };
+export interface SupportChatPanelProps {
+  chatId: string | null;
+  userName?: string;
+  onCreateNewTicket?: () => void;
+}
+
+export function SupportChatPanel({ chatId: propChatId, userName, onCreateNewTicket }: SupportChatPanelProps) {
   const { user } = useAuthStore();
   const { isDarkMode } = useTheme();
   const [messages, setMessages] = useState<any[]>([]);
@@ -24,7 +26,6 @@ export default function ChatSupportScreen() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isTyping, setIsTyping] = useState(false);
 
-  const params = route.params as { chatId?: string; userName?: string; initialMessage?: string; autoSend?: boolean; forceNewTicket?: boolean } | undefined;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -35,46 +36,34 @@ export default function ChatSupportScreen() {
   }, [messages, isTyping]);
 
   useEffect(() => {
-    if (params?.initialMessage) {
-      setNewMessage(params.initialMessage);
-    }
     const initChat = async () => {
       try {
         let existingChat;
 
-        if (params?.forceNewTicket) {
-          existingChat = null;
-        } else if (params?.chatId) {
-          const { data } = await supabase.from('chats').select('id, status, user_id').eq('id', params.chatId).single();
+        if (propChatId) {
+          const { data } = await supabase.from('chats').select('id, status, user_id').eq('id', propChatId).single();
           existingChat = data;
         } else {
-          const { data } = await supabase.from('chats').select('id, status, user_id').eq('user_id', user?.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-          existingChat = data;
+          return; // No chat selected, loading is false
         }
 
         if (existingChat) {
           setChatId(existingChat.id);
           setChatStatus(existingChat.status || 'open');
           setChatOwnerId(existingChat.user_id);
-        } else {
-          const { data: newChat, error: createError } = await supabase.from('chats').insert({ user_id: user?.id, status: 'open' }).select().single();
-          if (createError) throw createError;
-          setChatId(newChat.id);
-          setChatStatus('open');
-          setChatOwnerId(newChat.user_id);
         }
       } catch (error) {
         console.error('Error initializing chat:', error);
       }
     };
-    initChat();
-  }, [params?.chatId, user?.id, params?.forceNewTicket]);
-
-  useEffect(() => {
-    if (chatId && params?.autoSend && params?.initialMessage && newMessage === params.initialMessage) {
-      sendMessage();
+    
+    if (propChatId) {
+      initChat();
+    } else {
+      setChatId(null);
+      setMessages([]);
     }
-  }, [chatId]);
+  }, [propChatId, user?.id]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -153,19 +142,8 @@ export default function ChatSupportScreen() {
   };
 
   const createNewTicket = async () => {
-    try {
-      setLoading(true);
-      const { data: newChat, error } = await supabase.from('chats').insert({ user_id: user?.id, status: 'open' }).select().single();
-      if (error) throw error;
-      setChatId(newChat.id);
-      setChatStatus('open');
-      setMessages([]);
-      setReplyingTo(null);
-      setNewMessage('');
-    } catch (error) {
-      alert('Error: Failed to create new ticket');
-    } finally {
-      setLoading(false);
+    if (onCreateNewTicket) {
+      onCreateNewTicket();
     }
   };
 
@@ -199,7 +177,7 @@ export default function ChatSupportScreen() {
       <div key={item.id} className={`flex flex-col mb-4 max-w-[85%] ${isMe ? 'self-end' : 'self-start'}`}>
         {repliedMessage && (
           <div className={`p-2.5 rounded-xl mb-2 mx-2 border-l-4 ${isMe ? 'bg-white/20 border-white/50 text-white' : isDarkMode ? 'bg-white/5 border-primary text-gray-300' : 'bg-gray-100 border-primary text-gray-700'}`}>
-            <span className="block text-xs font-bold mb-1 opacity-90">{repliedMessage.sender_id === user?.id ? 'You' : (params?.userName || 'Support')}</span>
+            <span className="block text-xs font-bold mb-1 opacity-90">{repliedMessage.sender_id === user?.id ? 'You' : (userName || 'Support')}</span>
             <span className="block text-xs opacity-80 truncate">{repliedMessage.message}</span>
           </div>
         )}
@@ -231,16 +209,25 @@ export default function ChatSupportScreen() {
     );
   };
 
+  if (!propChatId) {
+    return (
+      <div className={`flex flex-col flex-1 items-center justify-center ${isDarkMode ? 'bg-slate-900 text-gray-400' : 'bg-slate-50 text-gray-500'}`}>
+        <MessageCircle size={48} className="mb-4 opacity-50" />
+        <span className="text-lg font-medium">Select a ticket to view messages</span>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex flex-col h-screen ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
-      <Header
-        title={params?.userName ? params.userName : 'Support Ticket'}
-        subtitle={chatId ? `Ticket: #${chatId.substring(0, 8)}` : undefined}
-        showBack={true}
-        rightComponent={
+    <div className={`flex flex-col h-full ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+      <div className={`px-6 py-4 border-b flex flex-row items-center justify-between ${isDarkMode ? 'bg-slate-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+        <div>
+          <h2 className="text-lg font-bold m-0 text-text">{userName ? userName : 'Support Ticket'}</h2>
+          <span className="text-xs text-textLight">Ticket: #{chatId?.substring(0, 8)}</span>
+        </div>
           <div className="flex flex-row items-center gap-3">
             <button onClick={() => setIsSearchVisible(!isSearchVisible)} className="p-2 bg-transparent border-none cursor-pointer">
-              {isSearchVisible ? <X size={24} className="text-text" /> : <Search size={24} className="text-text" />}
+              {isSearchVisible ? <X size={20} className="text-text" /> : <Search size={20} className="text-text" />}
             </button>
             {user?.role === 'admin' ? (
               chatStatus === 'open' && (
@@ -256,8 +243,7 @@ export default function ChatSupportScreen() {
               )
             )}
           </div>
-        }
-      />
+      </div>
 
       {isSearchVisible && (
         <div className={`p-3 border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
@@ -291,7 +277,7 @@ export default function ChatSupportScreen() {
             {replyingTo && (
               <div className={`flex flex-row items-center p-3 rounded-t-2xl ${isDarkMode ? 'bg-white/5' : 'bg-white'}`}>
                 <div className="flex-1 mr-2">
-                  <span className="block text-xs font-bold text-primary mb-0.5">Replying to {replyingTo.sender_id === user?.id ? 'Yourself' : (params?.userName || 'Support')}</span>
+                  <span className="block text-xs font-bold text-primary mb-0.5">Replying to {replyingTo.sender_id === user?.id ? 'Yourself' : (userName || 'Support')}</span>
                   <span className="block text-xs text-textLight truncate">{replyingTo.message}</span>
                 </div>
                 <button onClick={() => setReplyingTo(null)} className="p-1 bg-transparent border-none cursor-pointer">
@@ -300,9 +286,6 @@ export default function ChatSupportScreen() {
               </div>
             )}
             <div className={`flex flex-row items-center rounded-[28px] px-2 py-1 shadow-md ${isDarkMode ? 'bg-white/10' : 'bg-white'} ${replyingTo ? 'rounded-t-none border-t border-gray-200 dark:border-gray-700' : ''}`}>
-              <button className="p-2.5 bg-transparent border-none cursor-pointer">
-                <Paperclip size={20} className="text-textLight hover:text-text transition-colors" />
-              </button>
               <input
                 className="flex-1 text-base px-3 py-2.5 bg-transparent border-none outline-none text-text"
                 value={newMessage}

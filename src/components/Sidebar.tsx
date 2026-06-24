@@ -25,7 +25,7 @@ const NAV_SECTIONS = [
       { name: 'Certificates',  route: '/certificates', label: 'Certificates',  icon: Award },
       { name: 'MyPayments',    route: '/mypayments',   label: 'Payments',      icon: CreditCard },
       { name: 'Coupons',       route: '/coupons',      label: 'Coupons',       icon: Ticket },
-      { name: 'ChatSupport',   route: '/chatsupport',  label: 'Support',       icon: Headset },
+      { name: 'SupportTickets', route: '/supporttickets', label: 'Support', icon: Headset },
     ],
   },
   {

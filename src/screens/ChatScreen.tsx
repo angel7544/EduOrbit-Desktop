@@ -245,9 +245,7 @@ export default function ChatScreen() {
       <div className={`p-3 pb-6 border-t ${isDarkMode ? 'bg-slate-900/80 border-gray-800 backdrop-blur-md' : 'bg-white/80 border-gray-200 backdrop-blur-md'}`}>
         <div className="max-w-4xl mx-auto w-full">
           <div className={`flex flex-row items-center rounded-[28px] px-2 py-1 shadow-md ${isDarkMode ? 'bg-white/10' : 'bg-white'}`}>
-            <button className="p-2.5 bg-transparent border-none cursor-pointer">
-            <Paperclip size={20} className="text-textLight hover:text-text transition-colors" />
-          </button>
+
 
           <input
             className="flex-1 text-base px-3 py-2.5 bg-transparent border-none outline-none text-text"
