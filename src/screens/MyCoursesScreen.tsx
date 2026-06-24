@@ -182,7 +182,7 @@ export default function MyCoursesScreen() {
             filteredCourses.map((item) => (
               <div
                 key={item.id}
-                className={`flex flex-col rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all ${isDarkMode ? 'bg-gray-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)]' : 'bg-white shadow-[0_4px_12px_rgba(0,0,0,0.05)]'} ${item.isExpired ? 'opacity-70 hover:opacity-100' : ''}`}
+                className={`group flex flex-col rounded-[20px] overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 ${isDarkMode ? 'bg-gray-800/80 border border-gray-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:border-gray-700 hover:-translate-y-1' : 'bg-white border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:-translate-y-1 hover:border-gray-200'} ${item.isExpired ? 'opacity-70 hover:opacity-100' : ''}`}
                 onClick={() => {
                   if (item.isExpired) {
                     if (window.confirm('Your access to this course has expired. Would you like to renew it?')) {
@@ -204,8 +204,8 @@ export default function MyCoursesScreen() {
                   } });
                 }}
               >
-                <div className="relative h-40 w-full">
-                  <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                <div className={`relative overflow-hidden aspect-[16/9] w-full border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-100'}`}>
+                  <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110" />
                   <div className="absolute inset-0 bg-black/5" />
                   
                   <div className={`absolute top-3 left-3 px-2 py-1 rounded-md z-10 ${item.isExpired ? 'bg-red-500' : 'bg-primary'}`}>
@@ -225,8 +225,15 @@ export default function MyCoursesScreen() {
                   )}
                 </div>
 
-                <div className="p-4">
-                  <span className={`block text-lg font-bold leading-[26px] mb-2 line-clamp-2 ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{item.title}</span>
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2 block">
+                      {item.category || 'Course'}
+                    </span>
+                    <span className={`block text-base font-extrabold leading-snug mb-4 line-clamp-2 transition-colors duration-300 group-hover:text-primary ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>
+                      {item.title}
+                    </span>
+                  </div>
 
                   <div className="flex flex-row items-center mb-4 gap-3">
                     <div className="flex flex-row items-center gap-1.5">

@@ -598,21 +598,25 @@ export default function DashboardScreen() {
                         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', marginTop: 3, display: 'block' }}>{activeProgress}% complete</span>
                       </div>
                     </div>
-                    <div style={{ padding: '14px 14px 16px' }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: '0 0 4px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {activeCourse.title}
-                      </p>
-                      <p style={{ fontSize: 11, color: textMuted, margin: '0 0 12px' }}>
-                        {activeCourse.teacher?.name || activeCourse.instructor_name || 'Instructor'}
-                      </p>
+                    <div style={{ padding: '14px 14px 16px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+                      <div>
+                        <p style={{ fontSize: 14, fontWeight: 800, color: textPrimary, margin: '0 0 6px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {activeCourse.title}
+                        </p>
+                        <p style={{ fontSize: 12, color: textMuted, margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <BookOpen size={14} /> 
+                          {progress?.[activeCourse.id]?.length || 0} / {activeCourse.chapters?.length || 0} lessons completed
+                        </p>
+                      </div>
                       <button
                         onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course: activeCourse } }); }}
                         style={{
-                          width: '100%', padding: '9px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                          width: '100%', padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer',
                           background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                          color: '#fff', fontSize: 12, fontWeight: 700,
+                          color: '#fff', fontSize: 13, fontWeight: 700,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
                         }}>
-                        Continue
+                        Resume Learning <ChevronRight size={16} />
                       </button>
                     </div>
                   </div>
@@ -761,7 +765,8 @@ export default function DashboardScreen() {
           width: 340, flexShrink: 0,
           borderLeft: `1px solid ${border}`,
           padding: '28px 20px 40px',
-          position: 'sticky', top: 57, height: 'calc(100vh - 57px)', overflowY: 'auto',
+          position: 'sticky', top: 57, height: 'calc(100vh - 57px)', 
+          overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none',
           background: isDarkMode ? '#0f172a' : '#fafafa',
         }}>
 
@@ -1035,7 +1040,7 @@ export default function DashboardScreen() {
               <button onClick={() => navigate('/notifications')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#6366f1' }}>View All</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {notifications.length > 0 ? notifications.map((notif: any, i: number) => (
+              {notifications.length > 0 ? notifications.slice(0, 4).map((notif: any, i: number) => (
                 <div key={i} style={{
                   display: 'flex', gap: 10, alignItems: 'flex-start',
                   background: cardBg, border: `1px solid ${border}`,

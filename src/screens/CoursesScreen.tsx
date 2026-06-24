@@ -357,7 +357,7 @@ export default function CoursesScreen() {
                     <img 
                       src={item.image} 
                       alt={item.title} 
-                      className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-108" 
+                      className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110" 
                     />
                     
                     {/* Glassmorphic Expiry Badges */}
