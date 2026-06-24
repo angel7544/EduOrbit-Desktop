@@ -55,86 +55,200 @@ export default function LoginScreen() {
     }
   };
 
+  const textMuted = isDarkMode ? '#9ca3af' : '#6b7280';
+
   return (
-    <div className="min-h-screen flex flex-col bg-primary relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
-        <Atom size={120} className="absolute top-[10%] left-[10%] text-white animate-[float_6s_ease-in-out_infinite]" />
-        <BookOpen size={100} className="absolute top-[20%] right-[15%] text-white animate-[float_7s_ease-in-out_infinite_500ms]" />
-        <GraduationCap size={150} className="absolute top-[40%] left-[20%] text-white animate-[float_8s_ease-in-out_infinite_1000ms]" />
-      </div>
+    <div className={`h-screen w-screen flex overflow-hidden ${isDarkMode ? 'bg-gray-950' : 'bg-gray-50'}`}>
+      
+      {/* ── Left Branding Section (Desktop Web only) ── */}
+      <div style={{
+        width: '45%',
+        background: 'linear-gradient(135deg, #1e3a8a, #2563eb)',
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        padding: '48px',
+        overflow: 'hidden',
+        userSelect: 'none'
+      }} className="hidden lg:flex">
+        {/* Animated background floating shapes */}
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.12, pointerEvents: 'none' }}>
+          <Atom size={120} style={{ position: 'absolute', top: '10%', left: '10%', color: '#fff', animation: 'float 6s ease-in-out infinite' }} />
+          <BookOpen size={100} style={{ position: 'absolute', top: '25%', right: '15%', color: '#fff', animation: 'float 7s ease-in-out infinite 0.5s' }} />
+          <GraduationCap size={150} style={{ position: 'absolute', bottom: '15%', left: '15%', color: '#fff', animation: 'float 8s ease-in-out infinite 1s' }} />
+        </div>
+        <style>{`
+          @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(8deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+          }
+        `}</style>
 
-      <CustomToast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
-
-      <div className="flex-1 flex flex-col pt-16 overflow-y-auto max-w-md mx-auto w-full">
-        <div className="flex flex-col items-center justify-center py-8 z-10">
-          <img src="/logo.png" alt="EduOrbit" className="w-32 h-32 object-contain" onError={(e) => { e.currentTarget.src = '/logo3.png'; }} />
-          <p className="text-blue-100 text-base mt-2 m-0">Bihar’s Digital Learning Revolution.</p>
+        {/* Brand header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, zIndex: 10 }}>
+          <img src="/logo.png" alt="EduOrbit" style={{ width: 40, height: 40, objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/logo3.png'; }} />
+          <span style={{ fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>EduOrbit</span>
         </div>
 
-        <div className={`flex-1 rounded-t-[35px] p-8 pb-12 shadow-2xl z-10 flex flex-col ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-          <div className="flex flex-row justify-between items-center mb-8">
-            <div>
-              <h2 className="text-3xl font-bold text-text m-0 mb-1">Login</h2>
-              <p className="text-sm text-textLight m-0">Welcome back to EduOrbit</p>
-            </div>
-            
-            <button 
-              type="button"
-              onClick={() => setIsMagicLink(!isMagicLink)}
-              className="relative flex flex-row items-center w-[150px] h-9 rounded-full bg-border/40 overflow-hidden cursor-pointer border-none p-0"
-            >
-              <div 
-                className={`absolute top-0 bottom-0 w-1/2 bg-primary rounded-full transition-all duration-300 ease-in-out ${isMagicLink ? 'left-1/2' : 'left-0'}`}
-              />
-              <div className="flex-1 flex justify-center items-center z-10">
-                <span className={`text-[11px] font-bold ${!isMagicLink ? 'text-white' : 'text-gray-500'}`}>Password</span>
-              </div>
-              <div className="flex-1 flex justify-center items-center z-10">
-                <span className={`text-[11px] font-bold ${isMagicLink ? 'text-white' : 'text-gray-500'}`}>Magic</span>
-              </div>
-            </button>
+        {/* Branding content */}
+        <div style={{ zIndex: 10, paddingRight: 32, margin: 'auto 0' }}>
+          <h1 style={{ fontSize: 36, fontWeight: 800, color: '#fff', lineHeight: 1.25, marginBottom: 16 }}>
+            Bihar’s Digital Learning Revolution.
+          </h1>
+          <p style={{ fontSize: 16, color: '#bfdbfe', lineHeight: 1.6, margin: 0, fontWeight: 500 }}>
+            Empowering students across Bihar with state-of-the-art interactive digital courses, live sessions, and overall metrics tracking. Join Bihar's premier educational portal today.
+          </p>
+        </div>
+
+        {/* Footer info */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#93c5fd', fontSize: 12, zIndex: 10 }}>
+          <span>© {new Date().getFullYear()} EduOrbit</span>
+          <span>v{APP_VERSION}</span>
+        </div>
+      </div>
+
+      {/* ── Right Form Section ── */}
+      <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 relative overflow-y-auto">
+        <CustomToast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
+
+        <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column' }}>
+          
+          {/* Mobile logo and title */}
+          <div className="lg:hidden flex flex-col items-center justify-center mb-8">
+            <img src="/logo.png" alt="EduOrbit" style={{ width: 80, height: 80, objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/logo3.png'; }} />
+            <h2 style={{ fontSize: 24, fontWeight: 900, color: isDarkMode ? '#3b82f6' : '#2563eb', margin: '8px 0 2px' }}>EduOrbit</h2>
+            <p style={{ fontSize: 13, color: textMuted, margin: 0 }}>Bihar’s Digital Learning Revolution.</p>
           </div>
 
-          <form onSubmit={handleLogin} className="flex flex-col gap-4 mb-8">
-            <div className="flex items-center px-4 h-[50px] rounded-full border border-border bg-inputBackground">
-              <Mail size={20} className="text-textLight mr-3 flex-shrink-0" />
-              <input type="email" placeholder="Email Address" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1 h-full bg-transparent border-none outline-none text-text text-base" />
-            </div>
-
-            {!isMagicLink && (
-              <div className="flex items-center px-4 h-[50px] rounded-full border border-border bg-inputBackground">
-                <Lock size={20} className="text-textLight mr-3 flex-shrink-0" />
-                <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="flex-1 h-full bg-transparent border-none outline-none text-text text-base" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="bg-transparent border-none cursor-pointer p-0 ml-2">
-                  {showPassword ? <EyeOff size={20} className="text-textLight" /> : <Eye size={20} className="text-textLight" />}
-                </button>
+          {/* Form Card */}
+          <div style={{
+            background: isDarkMode ? '#1f2937' : '#ffffff',
+            border: `1px solid ${isDarkMode ? '#374151' : '#e5e7eb'}`,
+            borderRadius: 24,
+            padding: '40px 32px 32px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.05)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+              <div>
+                <h3 style={{ fontSize: 26, fontWeight: 800, color: isDarkMode ? '#f9fafb' : '#111827', margin: '0 0 4px' }}>Login</h3>
+                <p style={{ fontSize: 13, color: textMuted, margin: 0 }}>Welcome back to EduOrbit</p>
               </div>
-            )}
 
-            <button type="submit" disabled={loading} className="h-[50px] rounded-full bg-primary text-white font-bold text-lg tracking-wider shadow-md hover:bg-primary/90 transition-colors cursor-pointer border-none mt-2 disabled:opacity-70 disabled:cursor-not-allowed">
-              {loading ? 'SENDING...' : (isMagicLink ? 'SEND MAGIC LINK' : 'LOG IN')}
-            </button>
-          </form>
-
-          <div className="flex flex-row justify-center items-center gap-1 mb-8">
-            <span className="text-base text-text">New here?</span>
-            <button type="button" onClick={() => navigate('/signup')} className="text-base font-bold text-primary bg-transparent border-none cursor-pointer p-0">
-              Create Account
-            </button>
-          </div>
-
-          <div className="flex flex-col items-center mt-auto">
-            <div className="flex flex-row items-center flex-wrap justify-center gap-2 mb-1">
-              <button onClick={() => navigate('/aboutus')} className="text-xs text-textLight bg-transparent border-none cursor-pointer hover:underline p-0">About Us</button>
-              <span className="text-xs text-textLight">|</span>
-              <button onClick={() => navigate('/termsofservice')} className="text-xs text-textLight bg-transparent border-none cursor-pointer hover:underline p-0">Terms of Service</button>
-              <span className="text-xs text-textLight">|</span>
-              <button onClick={() => navigate('/privacypolicy')} className="text-xs text-textLight bg-transparent border-none cursor-pointer hover:underline p-0">Privacy Policy</button>
+              {/* Password/Magic toggle slider button */}
+              <button 
+                type="button"
+                onClick={() => setIsMagicLink(!isMagicLink)}
+                style={{
+                  position: 'relative', display: 'flex', alignItems: 'center', width: 140, height: 34,
+                  borderRadius: 99, background: isDarkMode ? '#374151' : '#f3f4f6', cursor: 'pointer',
+                  border: 'none', padding: 0, overflow: 'hidden'
+                }}
+              >
+                <div 
+                  style={{
+                    position: 'absolute', top: 2, bottom: 2, width: 66,
+                    background: '#2563eb', borderRadius: 99, transition: 'transform 0.25s ease',
+                    transform: isMagicLink ? 'translateX(70px)' : 'translateX(2px)'
+                  }}
+                />
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: !isMagicLink ? '#ffffff' : textMuted }}>Password</span>
+                </div>
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isMagicLink ? '#ffffff' : textMuted }}>Magic</span>
+                </div>
+              </button>
             </div>
-            <p className="text-xs text-textLight m-0">v{APP_VERSION}</p>
+
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+              {/* Email address field */}
+              <div style={{
+                display: 'flex', alignItems: 'center', height: 48, borderRadius: 99,
+                border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
+                background: isDarkMode ? '#374151' : '#f9fafb',
+                padding: '0 16px'
+              }}>
+                <Mail size={18} color={isDarkMode ? '#9ca3af' : '#6b7280'} style={{ marginRight: 10, flexShrink: 0 }} />
+                <input
+                  type="email"
+                  placeholder="Email Address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{
+                    flex: 1, height: '100%', background: 'transparent', border: 'none', outline: 'none',
+                    fontSize: 14, color: isDarkMode ? '#f9fafb' : '#111827'
+                  }}
+                />
+              </div>
+
+              {/* Password field */}
+              {!isMagicLink && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', height: 48, borderRadius: 99,
+                  border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
+                  background: isDarkMode ? '#374151' : '#f9fafb',
+                  padding: '0 16px'
+                }}>
+                  <Lock size={18} color={isDarkMode ? '#9ca3af' : '#6b7280'} style={{ marginRight: 10, flexShrink: 0 }} />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    style={{
+                      flex: 1, height: '100%', background: 'transparent', border: 'none', outline: 'none',
+                      fontSize: 14, color: isDarkMode ? '#f9fafb' : '#111827'
+                    }}
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 8, display: 'flex', alignItems: 'center' }}>
+                    {showPassword ? <EyeOff size={18} color={isDarkMode ? '#9ca3af' : '#6b7280'} /> : <Eye size={18} color={isDarkMode ? '#9ca3af' : '#6b7280'} />}
+                  </button>
+                </div>
+              )}
+
+              {/* Submit button */}
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  height: 48, borderRadius: 99, background: '#2563eb', color: '#ffffff',
+                  fontWeight: 700, fontSize: 15, letterSpacing: '0.5px', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                  border: 'none', cursor: 'pointer', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: loading ? 0.7 : 1, transition: 'opacity 0.2s'
+                }}
+              >
+                {loading ? 'SENDING...' : (isMagicLink ? 'SEND MAGIC LINK' : 'LOG IN')}
+              </button>
+            </form>
+
+            {/* Create account prompt */}
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 14, color: isDarkMode ? '#d1d5db' : '#4b5563' }}>New here?</span>
+              <button type="button" onClick={() => navigate('/signup')} style={{ fontSize: 14, fontWeight: 700, color: '#2563eb', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>
+                Create Account
+              </button>
+            </div>
           </div>
+
+          {/* Links for Web layout */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 32 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 6 }}>
+              <button onClick={() => navigate('/aboutus')} style={{ fontSize: 11, color: textMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>About Us</button>
+              <span style={{ fontSize: 11, color: textMuted }}>•</span>
+              <button onClick={() => navigate('/termsofservice')} style={{ fontSize: 11, color: textMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>Terms of Service</button>
+              <span style={{ fontSize: 11, color: textMuted }}>•</span>
+              <button onClick={() => navigate('/privacypolicy')} style={{ fontSize: 11, color: textMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>Privacy Policy</button>
+            </div>
+            <p style={{ fontSize: 10, color: textMuted, margin: 0 }}>v{APP_VERSION}</p>
+          </div>
+
         </div>
       </div>
     </div>
   );
+  
 }

@@ -46,9 +46,10 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   decrementUnread: () => set((state) => ({ unreadCount: Math.max(0, state.unreadCount - 1) })),
   reset: () => set({ unreadCount: 0 }),
   subscribeToUnreadCount: (userId: string, enrolledIds: Set<string>) => {
-    // Create a single shared channel for this user
+    // Create a unique channel for this subscription session to prevent name collisions in supabase cache
+    const channelId = `unread_count_${userId}_${Math.random().toString(36).substring(2, 9)}`;
     const channel = supabase
-      .channel(`public:notifications:count:${userId}`)
+      .channel(channelId)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications' },

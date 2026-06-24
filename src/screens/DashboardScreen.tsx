@@ -37,6 +37,57 @@ export default function DashboardScreen() {
     return courses.filter(c => c.is_featured && !myCourses.some(mc => mc.id === c.id));
   }, [courses, myCourses]);
 
+  // Dynamically build categories from the database (courses table video_subject values)
+  const categories = useMemo(() => {
+    // Get unique subjects from published courses
+    const subjects = Array.from(
+      new Set(
+        courses
+          .map((c: any) => c.video_subject)
+          .filter(Boolean)
+      )
+    );
+
+    const colorPalette = ['#3b82f6', '#14b8a6', '#ef4444', '#f97316', '#a855f7', '#06b6d4', '#10b981'];
+
+    const getIconAndColor = (subjName: string, index: number) => {
+      const lower = subjName.toLowerCase();
+      const color = colorPalette[index % colorPalette.length];
+      if (lower.includes('math') || lower.includes('calc')) return { icon: Calculator, color };
+      if (lower.includes('science') || lower.includes('chem') || lower.includes('phys') || lower.includes('bio') || lower.includes('evs')) return { icon: FlaskConical, color };
+      if (lower.includes('design') || lower.includes('art') || lower.includes('draw')) return { icon: Layers, color };
+      if (lower.includes('video') || lower.includes('media') || lower.includes('play')) return { icon: Video, color };
+      if (lower.includes('star') || lower.includes('premium')) return { icon: Star, color };
+      return { icon: BookOpen, color };
+    };
+
+    const list = subjects.map((subjName: any, idx) => {
+      const { icon, color } = getIconAndColor(subjName, idx);
+      return {
+        id: `db-${idx}`,
+        name: subjName,
+        icon,
+        color,
+        count: courses.filter(c => c.video_subject === subjName).length
+      };
+    });
+
+    // Add Premium category if premium courses exist
+    const premiumCount = courses.filter(c => c.price && c.price > 0).length;
+    if (premiumCount > 0) {
+      list.push({
+        id: 'db-premium',
+        name: 'Premium',
+        icon: Star,
+        color: '#f59e0b',
+        count: premiumCount
+      });
+    }
+
+    // Return the list (limit to 9 categories for UI balance)
+    return list.slice(0, 9);
+  }, [courses]);
+
   // Auto slide the carousel
   useEffect(() => {
     if (unpurchasedFeaturedCourses.length <= 1) return;
@@ -261,14 +312,7 @@ export default function DashboardScreen() {
     { label: 'Learning Hours', value: watchTimeDisplay, icon: Clock, color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', sub: '+6h this week' },
   ];
 
-  const categories = [
-    { id: '1', name: 'Urdu', icon: BookOpen, color: '#3b82f6', count: courses.filter(c => c.video_subject?.toLowerCase() === 'urdu').length || 0 },
-    { id: '2', name: 'Math', icon: Calculator, color: '#14b8a6', count: courses.filter(c => c.video_subject?.toLowerCase() === 'math').length || 0 },
-    { id: '3', name: 'Science', icon: FlaskConical, color: '#ef4444', count: courses.filter(c => c.video_subject?.toLowerCase() === 'science').length || 0 },
-    { id: '4', name: 'Premium', icon: Star, color: '#f97316', count: courses.filter(c => c.price && c.price > 0).length || 0 },
-    { id: '5', name: 'Design', icon: Layers, color: '#a855f7', count: courses.filter(c => c.video_subject?.toLowerCase() === 'design').length || 0 },
-    { id: '6', name: 'Video', icon: Video, color: '#06b6d4', count: 0 },
-  ];
+
 
   // Continue learning — most recent enrolled courses
   const continueLearning = myCourses.slice(0, 4);
