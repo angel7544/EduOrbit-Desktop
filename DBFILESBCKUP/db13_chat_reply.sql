@@ -1,0 +1,6 @@
+
+-- Add reply_to_id to messages table
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS reply_to_id uuid REFERENCES public.messages(id);
+
+-- Add index for better performance
+CREATE INDEX IF NOT EXISTS messages_reply_to_id_idx ON public.messages(reply_to_id);

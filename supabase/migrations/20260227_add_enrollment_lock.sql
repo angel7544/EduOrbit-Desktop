@@ -1,0 +1,1 @@
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_enrollment_closed BOOLEAN DEFAULT FALSE;

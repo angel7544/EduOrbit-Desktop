@@ -1,0 +1,26 @@
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+
+interface ThemeState {
+  isDarkMode: boolean;
+  toggleTheme: () => void;
+  setTheme: (isDark: boolean) => void;
+}
+
+export const useThemeStore = create<ThemeState>()(
+  persist(
+    (set) => ({
+      isDarkMode: false,
+      toggleTheme: () => set((state) => ({ isDarkMode: !state.isDarkMode })),
+      setTheme: (isDark) => set({ isDarkMode: isDark }),
+    }),
+    {
+      name: 'theme-storage',
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+);
+export function useTheme(): { colors: any; isDarkMode: any; } {
+  throw new Error('Function not implemented.');
+}
+
