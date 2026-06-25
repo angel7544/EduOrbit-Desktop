@@ -7,6 +7,8 @@ interface UIState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   sidebarWidth: number;
   setSidebarWidth: (width: number) => void;
+  isRightPanelOpen: boolean;
+  setIsRightPanelOpen: (isOpen: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -17,6 +19,8 @@ export const useUIStore = create<UIState>()(
       setSidebarCollapsed: (collapsed) => {},
       sidebarWidth: 260,
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
+      isRightPanelOpen: true,
+      setIsRightPanelOpen: (isOpen) => set({ isRightPanelOpen: isOpen }),
     }),
     {
       name: 'ui-storage',

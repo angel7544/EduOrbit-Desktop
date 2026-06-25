@@ -10,6 +10,7 @@ import { useCourseStore } from '../store/courseStore';
 import { currencyFormater, stripMarkdown } from '../lib/utils';
 import { useTheme } from '../hooks/useTheme';
 import { useNotificationStore } from '../store/notificationStore';
+import { useUIStore } from '../store/uiStore';
 import { supabase } from '../lib/supabase';
 import { AppLoader } from '../components/AppLoader';
 import { Avatar } from '../components/Avatar';
@@ -31,7 +32,7 @@ export default function DashboardScreen() {
   const [streakCount, setStreakCount] = useState(1);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+  const { isRightPanelOpen, setIsRightPanelOpen } = useUIStore();
 
   // Filter featured courses that the user hasn't purchased yet
   const unpurchasedFeaturedCourses = useMemo(() => {

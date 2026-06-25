@@ -15,7 +15,7 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [profession, setProfession] = useState(user?.profession || '');
+  const [bio, setBio] = useState(user?.bio || '');
   const [email, setEmail] = useState(user?.email || '');
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -25,7 +25,7 @@ export default function EditProfileScreen() {
     if (user) {
       setName(user.name || '');
       setPhone(user.phone || '');
-      setProfession(user.profession || '');
+      setBio(user.bio || '');
       setEmail(user.email || '');
       setProfileImage(user.profileImage || '');
     }
@@ -78,7 +78,7 @@ export default function EditProfileScreen() {
         .update({
           name: name.trim(),
           phone: phone.trim(),
-          profession: profession.trim(),
+          bio: bio.trim(),
           profile_image: profileImage,
         })
         .eq('id', user.id);
@@ -88,7 +88,7 @@ export default function EditProfileScreen() {
       updateProfile({
         name: name.trim(),
         phone: phone.trim(),
-        profession: profession.trim(),
+        bio: bio.trim(),
         profileImage,
       });
 
@@ -169,14 +169,14 @@ export default function EditProfileScreen() {
           </div>
 
           <div>
-            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Profession</span>
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Bio</span>
             <div className={`flex flex-row items-center px-4 h-13 rounded-2xl border transition-all ${isDarkMode ? 'bg-gray-800 border-gray-700/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10' : 'bg-white border-gray-200 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/5'}`}>
               <Briefcase size={18} className={isDarkMode ? 'text-gray-500' : 'text-gray-400'} />
               <input
                 className={`flex-1 ml-3 h-full bg-transparent border-none outline-none text-base ${isDarkMode ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}`}
                 placeholder="Student, Developer, etc."
-                value={profession}
-                onChange={(e) => setProfession(e.target.value)}
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
               />
             </div>
           </div>
