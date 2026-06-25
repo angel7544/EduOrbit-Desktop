@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, Send, Search, X, Lock, Unlock, Reply, PlusCircle, Paperclip, MessageCircle } from 'lucide-react';
+import { ChevronLeft, Send, Search, X, Lock, Unlock, Reply, PlusCircle, Paperclip, MessageCircle, Menu } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../hooks/useTheme';
@@ -9,9 +9,11 @@ export interface SupportChatPanelProps {
   chatId: string | null;
   userName?: string;
   onCreateNewTicket?: () => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-export function SupportChatPanel({ chatId: propChatId, userName, onCreateNewTicket }: SupportChatPanelProps) {
+export function SupportChatPanel({ chatId: propChatId, userName, onCreateNewTicket, isSidebarOpen, onToggleSidebar }: SupportChatPanelProps) {
   const { user } = useAuthStore();
   const { isDarkMode } = useTheme();
   const [messages, setMessages] = useState<any[]>([]);
@@ -221,9 +223,16 @@ export function SupportChatPanel({ chatId: propChatId, userName, onCreateNewTick
   return (
     <div className={`flex flex-col h-full ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
       <div className={`px-6 py-4 border-b flex flex-row items-center justify-between ${isDarkMode ? 'bg-slate-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-        <div>
-          <h2 className="text-lg font-bold m-0 text-text">{userName ? userName : 'Support Ticket'}</h2>
-          <span className="text-xs text-textLight">Ticket: #{chatId?.substring(0, 8)}</span>
+        <div className="flex items-center gap-3">
+          {onToggleSidebar && (
+            <button onClick={onToggleSidebar} className="p-2 bg-transparent border-none cursor-pointer -ml-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <Menu size={20} className="text-text" />
+            </button>
+          )}
+          <div>
+            <h2 className="text-lg font-bold m-0 text-text">{userName ? userName : 'Support Ticket'}</h2>
+            <span className="text-xs text-textLight">Ticket: #{chatId?.substring(0, 8)}</span>
+          </div>
         </div>
           <div className="flex flex-row items-center gap-3">
             <button onClick={() => setIsSearchVisible(!isSearchVisible)} className="p-2 bg-transparent border-none cursor-pointer">

@@ -31,6 +31,7 @@ export default function DashboardScreen() {
   const [streakCount, setStreakCount] = useState(1);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
 
   // Filter featured courses that the user hasn't purchased yet
   const unpurchasedFeaturedCourses = useMemo(() => {
@@ -426,6 +427,18 @@ export default function DashboardScreen() {
 
         {/* Right icons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          {/* Panel Toggle Button */}
+          <button
+            onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
+            style={{
+              position: 'relative', width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginRight: 8
+            }}
+          >
+            {isRightPanelOpen ? <ChevronRight size={18} color={textMuted} /> : <ChevronLeft size={18} color={textMuted} />}
+          </button>
+          
           <div style={{
             display: 'flex', alignItems: 'center', gap: 4,
             background: 'rgba(249,115,22,0.1)', padding: '5px 10px', borderRadius: 20,
@@ -765,16 +778,17 @@ export default function DashboardScreen() {
         </div>
 
         {/* ═══ RIGHT SIDEBAR ═══ */}
-        <div style={{
-          width: 340, flexShrink: 0,
-          borderLeft: `1px solid ${border}`,
-          padding: '28px 20px 40px',
-          position: 'sticky', top: 57, height: 'calc(100vh - 57px)', 
-          overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none',
-          background: isDarkMode ? '#0f172a' : '#fafafa',
-        }}>
+        {isRightPanelOpen && (
+          <div style={{
+            width: 340, flexShrink: 0,
+            borderLeft: `1px solid ${border}`,
+            padding: '28px 20px 40px',
+            position: 'sticky', top: 57, height: 'calc(100vh - 57px)', 
+            overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none',
+            background: isDarkMode ? '#0f172a' : '#fafafa',
+          }}>
 
-          {/* ── Upcoming Live Sessions ── */}
+            {/* ── Upcoming Live Sessions ── */}
           {liveChapters.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -783,6 +797,7 @@ export default function DashboardScreen() {
                   Upcoming Live
                 </h3>
               </div>
+              {/* END Upcoming Live Sessions */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {liveChapters.map((ch: any) => {
                   const isCurrentlyLive = ch.live_status === 'LIVE';
@@ -1083,6 +1098,7 @@ export default function DashboardScreen() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

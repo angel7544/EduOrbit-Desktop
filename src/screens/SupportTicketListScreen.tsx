@@ -20,6 +20,7 @@ export default function SupportTicketListScreen() {
   
   const [selectedChatId, setSelectedChatId] = useState<string | null>(routeParams?.chatId || null);
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -134,7 +135,8 @@ export default function SupportTicketListScreen() {
     <div className={`flex flex-row h-screen overflow-hidden ${isDarkMode ? 'bg-[#0f0f0f] text-gray-50' : 'bg-gray-50 text-gray-900'}`}>
       
       {/* LEFT SIDEBAR */}
-      <div className={`w-[320px] md:w-[380px] flex-shrink-0 flex flex-col border-r ${isDarkMode ? 'border-white/10 bg-[#141414]' : 'border-gray-200 bg-white'} z-10 shadow-sm`}>
+      {isSidebarOpen && (
+        <div className={`w-[320px] md:w-[380px] flex-shrink-0 flex flex-col border-r ${isDarkMode ? 'border-white/10 bg-[#141414]' : 'border-gray-200 bg-white'} z-10 shadow-sm transition-all duration-300`}>
         <div className="p-4 pt-6 pb-2">
           <div className="flex flex-row items-center justify-between mb-5">
             <h1 className="text-2xl font-bold m-0 tracking-tight">Chats</h1>
@@ -256,7 +258,8 @@ export default function SupportTicketListScreen() {
             </div>
           )}
         </div>
-      </div>
+        </div>
+      )}
 
       {/* RIGHT CHAT PANEL */}
       <div className={`flex-1 flex flex-col relative ${isDarkMode ? 'bg-[#0f0f0f]' : 'bg-white'}`}>
@@ -264,6 +267,8 @@ export default function SupportTicketListScreen() {
           chatId={selectedChatId} 
           userName={selectedChatUserName} 
           onCreateNewTicket={createNewTicket}
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
       </div>
       

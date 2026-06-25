@@ -48,28 +48,36 @@ export const Sidebar = () => {
     navigate('/login');
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    // Prevent default to avoid selection if it's a mouse event, but don't prevent default on touch start immediately if it breaks scrolling, though here we're dragging.
+    if ('clientX' in e) {
+      e.preventDefault();
+    }
+    const startX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const startWidth = sidebarWidth;
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
       // Constrain sidebar width between 200px and 450px
-      const newWidth = Math.max(200, Math.min(450, startWidth + (moveEvent.clientX - startX)));
+      const newWidth = Math.max(200, Math.min(450, startWidth + (currentX - startX)));
       setSidebarWidth(newWidth);
     };
 
     const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mousemove', handleMouseMove as EventListener);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleMouseMove as EventListener);
+      document.removeEventListener('touchend', handleMouseUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
 
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mousemove', handleMouseMove as EventListener);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchmove', handleMouseMove as EventListener, { passive: false });
+    document.addEventListener('touchend', handleMouseUp);
   };
 
   return (
@@ -159,6 +167,7 @@ export const Sidebar = () => {
       {/* Resize Handle */}
       <div
         onMouseDown={handleMouseDown}
+        onTouchStart={handleMouseDown}
         className="absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize z-50 transition-colors duration-150 hover:bg-primary/30 active:bg-primary/60 group flex items-center justify-center"
       >
         <div className="w-[2px] h-8 bg-gray-400/30 group-hover:bg-primary/60 rounded-full transition-colors duration-150" />
