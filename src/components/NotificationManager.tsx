@@ -54,13 +54,6 @@ export const NotificationManager = () => {
   useEffect(() => {
     if (user) {
       fetchUnreadCount(user.id, enrolledIds);
-
-      // Add periodic refresh for the notification bell count
-      const countInterval = setInterval(() => {
-        fetchUnreadCount(user.id, enrolledIds);
-      }, 500); // 500ms
-
-      return () => clearInterval(countInterval);
     }
   }, [user, enrolledIds, fetchUnreadCount]);
 

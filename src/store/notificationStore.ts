@@ -19,7 +19,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     try {
       const { data: allNotifs, error: notifError } = await supabase
         .from('notifications')
-        .select('id, course_id, user_id');
+        .select('id, course_id, user_id, type');
 
       if (notifError) throw notifError;
 
