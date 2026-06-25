@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, CheckCircle2, Lock,
+  ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Lock,
   Play, Share2, BookOpen, Clock, CheckCheck, FileText
 } from 'lucide-react';
 import { ChapterItem, useCourseStore } from '../store/courseStore';
@@ -29,6 +29,14 @@ export default function ChapterPlayerScreen() {
   const [hasAccess, setHasAccess] = useState<boolean>(initialHasAccess || false);
   const [loading, setLoading] = useState(!initialChapter);
   const [markingComplete, setMarkingComplete] = useState(false);
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>(() => {
+    return initialChapter ? { [initialChapter.id]: true } : {};
+  });
+
+  const toggleChapter = (chapterId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
+  };
 
   useEffect(() => {
     if (user && courseId) loadProgress(courseId, user.id);
@@ -132,6 +140,7 @@ export default function ChapterPlayerScreen() {
     }
     setCurrentChapter(ch);
     setCurrentLessonId(item.type === 'lesson' ? item.lesson.id : null);
+    setExpandedChapters(prev => ({ ...prev, [ch.id]: true }));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -195,8 +204,202 @@ export default function ChapterPlayerScreen() {
       {/* ── Main Content ── */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
 
-        {/* Left: Video + Info */}
-        <div style={{ flex: '2.5', display: 'flex', flexDirection: 'column', overflowY: 'auto', borderRight: `1px solid ${border}` }}>
+        {/* Left: Playlist Sidebar */}
+        <div style={{
+          width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column',
+          background: isDarkMode ? '#1e293b' : '#f8fafc',
+          overflowY: 'auto',
+          borderRight: `1px solid ${border}`
+        }}>
+          {/* Playlist header */}
+          <div style={{
+            padding: '16px 20px', borderBottom: `1px solid ${border}`,
+            background: isDarkMode ? '#0f172a' : '#fff', position: 'sticky', top: 0, zIndex: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: textPrimary }}>Course Playlist</span>
+              <span style={{ fontSize: 12, color: textMuted }}>{totalCount} lessons</span>
+            </div>
+            {/* mini progress */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, height: 4, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99 }}>
+                <div style={{ height: '100%', width: `${overallProgress}%`, background: 'linear-gradient(90deg, #6366f1, #8b5cf6)', borderRadius: 99 }} />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
+            </div>
+          </div>
+
+          {/* Chapter list */}
+          <div>
+            {sortedChapters.map((ch: any, idx: number) => {
+              const isDone = progress[courseId]?.includes(ch.id);
+              const isLocked = !ch.is_demo && !hasAccess;
+              
+              const hasChapterVideo = !ch.lessons || ch.lessons.length === 0 || ch.video_url;
+              const hasLessons = ch.lessons && ch.lessons.length > 0;
+              const isExpanded = expandedChapters[ch.id];
+
+              return (
+                <div key={ch.id} style={{ borderBottom: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}` }}>
+                  {hasChapterVideo && (
+                    <button
+                      onClick={() => navigateToItem({ type: 'chapter', chapter: ch })}
+                      disabled={isLocked}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '12px 16px',
+                        background: (currentChapter?.id === ch.id && !currentLessonId)
+                          ? (isDarkMode ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)')
+                          : 'transparent',
+                        borderLeft: (currentChapter?.id === ch.id && !currentLessonId) ? '3px solid #6366f1' : '3px solid transparent',
+                        border: 'none', cursor: isLocked ? 'not-allowed' : 'pointer',
+                        opacity: isLocked ? 0.5 : 1,
+                        textAlign: 'left',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: (currentChapter?.id === ch.id && !currentLessonId) ? '#6366f1' : isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                      }}>
+                        {isLocked
+                          ? <Lock size={13} color={textMuted} />
+                          : (currentChapter?.id === ch.id && !currentLessonId)
+                            ? <Play size={12} color="#fff" fill="#fff" />
+                            : isDone
+                              ? <CheckCircle2 size={14} color="#10b981" />
+                              : <span style={{ fontSize: 11, fontWeight: 700, color: textMuted }}>{idx + 1}</span>
+                        }
+                      </div>
+
+                      <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <p style={{
+                          fontSize: 13, fontWeight: (currentChapter?.id === ch.id && !currentLessonId) ? 700 : 500,
+                          color: (currentChapter?.id === ch.id && !currentLessonId) ? '#6366f1' : textPrimary,
+                          margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {ch.title}
+                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          <Clock size={10} color={textMuted} />
+                          <span style={{ fontSize: 11, color: textMuted }}>
+                            {ch.duration ? `${Math.floor(ch.duration / 60)}m ${ch.duration % 60}s` : 'Video'}
+                          </span>
+                          {ch.is_demo && (
+                            <span style={{
+                              fontSize: 9, fontWeight: 700, color: '#10b981',
+                              background: 'rgba(16,185,129,0.12)', padding: '1px 5px', borderRadius: 4, marginLeft: 4,
+                            }}>FREE</span>
+                          )}
+                        </div>
+                      </div>
+                      {hasLessons && (
+                        <div
+                          onClick={(e) => toggleChapter(ch.id, e)}
+                          style={{
+                            padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            borderRadius: '50%', background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                          }}
+                        >
+                          {isExpanded ? <ChevronUp size={16} color={textMuted} /> : <ChevronDown size={16} color={textMuted} />}
+                        </div>
+                      )}
+                    </button>
+                  )}
+
+                  {!hasChapterVideo && (
+                    <div
+                      onClick={(e) => hasLessons && toggleChapter(ch.id, e)}
+                      style={{
+                        padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
+                        cursor: hasLessons ? 'pointer' : 'default',
+                        background: isExpanded ? (isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)') : 'transparent'
+                      }}
+                    >
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                      }}>
+                        {isDone ? <CheckCircle2 size={14} color="#10b981" /> : <span style={{ fontSize: 11, fontWeight: 700, color: textMuted }}>{idx + 1}</span>}
+                      </div>
+                      <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <p style={{
+                          fontSize: 13, fontWeight: 700, color: textPrimary,
+                          margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {ch.title}
+                        </p>
+                      </div>
+                      {hasLessons && (
+                        <div style={{ padding: 4, display: 'flex', alignItems: 'center' }}>
+                          {isExpanded ? <ChevronUp size={16} color={textMuted} /> : <ChevronDown size={16} color={textMuted} />}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {hasLessons && isExpanded && (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {[...ch.lessons].sort((a:any, b:any) => (a.position||0) - (b.position||0)).map((lesson: any) => {
+                        const isLessonActive = currentLessonId === lesson.id;
+                        const isLessonLocked = !lesson.is_free && !hasAccess;
+
+                        return (
+                          <button
+                            key={lesson.id}
+                            onClick={() => navigateToItem({ type: 'lesson', chapter: ch, lesson })}
+                            disabled={isLessonLocked}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                              padding: '10px 16px 10px 48px',
+                              background: isLessonActive
+                                ? (isDarkMode ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)')
+                                : 'transparent',
+                              borderLeft: isLessonActive ? '3px solid #6366f1' : '3px solid transparent',
+                              border: 'none', cursor: isLessonLocked ? 'not-allowed' : 'pointer',
+                              opacity: isLessonLocked ? 0.5 : 1,
+                              textAlign: 'left',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            <div style={{ flex: 1, overflow: 'hidden' }}>
+                              <p style={{
+                                fontSize: 12, fontWeight: isLessonActive ? 700 : 500,
+                                color: isLessonActive ? '#6366f1' : textPrimary,
+                                margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                display: 'flex', alignItems: 'center', gap: 6
+                              }}>
+                                {isLessonLocked ? <Lock size={10} color={textMuted} /> : <Play size={10} color={isLessonActive ? '#6366f1' : textMuted} />}
+                                {lesson.title}
+                              </p>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, paddingLeft: 16 }}>
+                                <Clock size={9} color={textMuted} />
+                                <span style={{ fontSize: 10, color: textMuted }}>
+                                  {lesson.duration ? `${Math.floor(lesson.duration / 60)}m ${lesson.duration % 60}s` : 'Video'}
+                                </span>
+                                {lesson.is_free && (
+                                  <span style={{
+                                    fontSize: 8, fontWeight: 700, color: '#10b981',
+                                    background: 'rgba(16,185,129,0.12)', padding: '1px 4px', borderRadius: 4, marginLeft: 4,
+                                  }}>FREE</span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right: Video + Info */}
+        <div style={{ flex: '2.5', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
 
           {/* Video Player */}
           <div style={{ position: 'relative', background: '#000', flexShrink: 0, maxHeight: '65vh' }}>
@@ -271,12 +474,12 @@ export default function ChapterPlayerScreen() {
           </div>
 
           {/* Description */}
-          {currentChapter?.description && (
+          {(currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description || currentChapter?.description : currentChapter?.description) && (
             <div style={{ padding: '24px 28px', background: bg }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>About this lesson</h3>
-              <div style={{ fontSize: 15, color: textMuted, lineHeight: 1.8, margin: 0 }}>
+              <div style={{ fontSize: 15, color: textMuted, lineHeight: 1.8, margin: 0, background: isDarkMode ? '#1e293b' : '#f1f5f9', padding: '16px', borderRadius: '8px' }}>
                 <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                  {currentChapter.description}
+                  {currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description || currentChapter?.description : currentChapter?.description}
                 </ReactMarkdown>
               </div>
             </div>
@@ -331,175 +534,6 @@ export default function ChapterPlayerScreen() {
               </div>
             </div>
           )}
-        </div>
-
-        {/* Right: Playlist Sidebar */}
-        <div style={{
-          width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column',
-          background: isDarkMode ? '#1e293b' : '#f8fafc',
-          overflowY: 'auto'
-        }}>
-          {/* Playlist header */}
-          <div style={{
-            padding: '16px 20px', borderBottom: `1px solid ${border}`,
-            background: isDarkMode ? '#0f172a' : '#fff', position: 'sticky', top: 0, zIndex: 10,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 800, color: textPrimary }}>Course Playlist</span>
-              <span style={{ fontSize: 12, color: textMuted }}>{totalCount} lessons</span>
-            </div>
-            {/* mini progress */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ flex: 1, height: 4, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99 }}>
-                <div style={{ height: '100%', width: `${overallProgress}%`, background: 'linear-gradient(90deg, #6366f1, #8b5cf6)', borderRadius: 99 }} />
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
-            </div>
-          </div>
-
-          {/* Chapter list */}
-          <div>
-            {sortedChapters.map((ch: any, idx: number) => {
-              const isDone = progress[courseId]?.includes(ch.id);
-              const isLocked = !ch.is_demo && !hasAccess;
-              
-              const hasChapterVideo = !ch.lessons || ch.lessons.length === 0 || ch.video_url;
-              const hasLessons = ch.lessons && ch.lessons.length > 0;
-
-              return (
-                <div key={ch.id} style={{ borderBottom: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}` }}>
-                  {hasChapterVideo && (
-                    <button
-                      onClick={() => navigateToItem({ type: 'chapter', chapter: ch })}
-                      disabled={isLocked}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '12px 16px',
-                        background: (currentChapter?.id === ch.id && !currentLessonId)
-                          ? (isDarkMode ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)')
-                          : 'transparent',
-                        borderLeft: (currentChapter?.id === ch.id && !currentLessonId) ? '3px solid #6366f1' : '3px solid transparent',
-                        border: 'none', cursor: isLocked ? 'not-allowed' : 'pointer',
-                        opacity: isLocked ? 0.5 : 1,
-                        textAlign: 'left',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      <div style={{
-                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: (currentChapter?.id === ch.id && !currentLessonId) ? '#6366f1' : isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
-                      }}>
-                        {isLocked
-                          ? <Lock size={13} color={textMuted} />
-                          : (currentChapter?.id === ch.id && !currentLessonId)
-                            ? <Play size={12} color="#fff" fill="#fff" />
-                            : isDone
-                              ? <CheckCircle2 size={14} color="#10b981" />
-                              : <span style={{ fontSize: 11, fontWeight: 700, color: textMuted }}>{idx + 1}</span>
-                        }
-                      </div>
-
-                      <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <p style={{
-                          fontSize: 13, fontWeight: (currentChapter?.id === ch.id && !currentLessonId) ? 700 : 500,
-                          color: (currentChapter?.id === ch.id && !currentLessonId) ? '#6366f1' : textPrimary,
-                          margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>
-                          {ch.title}
-                        </p>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                          <Clock size={10} color={textMuted} />
-                          <span style={{ fontSize: 11, color: textMuted }}>
-                            {ch.duration ? `${Math.floor(ch.duration / 60)}m ${ch.duration % 60}s` : 'Video'}
-                          </span>
-                          {ch.is_demo && (
-                            <span style={{
-                              fontSize: 9, fontWeight: 700, color: '#10b981',
-                              background: 'rgba(16,185,129,0.12)', padding: '1px 5px', borderRadius: 4, marginLeft: 4,
-                            }}>FREE</span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  )}
-
-                  {!hasChapterVideo && (
-                    <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
-                      }}>
-                        {isDone ? <CheckCircle2 size={14} color="#10b981" /> : <span style={{ fontSize: 11, fontWeight: 700, color: textMuted }}>{idx + 1}</span>}
-                      </div>
-                      <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <p style={{
-                          fontSize: 13, fontWeight: 700, color: textPrimary,
-                          margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>
-                          {ch.title}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {hasLessons && (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      {[...ch.lessons].sort((a:any, b:any) => (a.position||0) - (b.position||0)).map((lesson: any) => {
-                        const isLessonActive = currentLessonId === lesson.id;
-                        const isLessonLocked = !lesson.is_free && !hasAccess;
-
-                        return (
-                          <button
-                            key={lesson.id}
-                            onClick={() => navigateToItem({ type: 'lesson', chapter: ch, lesson })}
-                            disabled={isLessonLocked}
-                            style={{
-                              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                              padding: '10px 16px 10px 48px',
-                              background: isLessonActive
-                                ? (isDarkMode ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)')
-                                : 'transparent',
-                              borderLeft: isLessonActive ? '3px solid #6366f1' : '3px solid transparent',
-                              border: 'none', cursor: isLessonLocked ? 'not-allowed' : 'pointer',
-                              opacity: isLessonLocked ? 0.5 : 1,
-                              textAlign: 'left',
-                              transition: 'all 0.15s',
-                            }}
-                          >
-                            <div style={{ flex: 1, overflow: 'hidden' }}>
-                              <p style={{
-                                fontSize: 12, fontWeight: isLessonActive ? 700 : 500,
-                                color: isLessonActive ? '#6366f1' : textPrimary,
-                                margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                display: 'flex', alignItems: 'center', gap: 6
-                              }}>
-                                {isLessonLocked ? <Lock size={10} color={textMuted} /> : <Play size={10} color={isLessonActive ? '#6366f1' : textMuted} />}
-                                {lesson.title}
-                              </p>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, paddingLeft: 16 }}>
-                                <Clock size={9} color={textMuted} />
-                                <span style={{ fontSize: 10, color: textMuted }}>
-                                  {lesson.duration ? `${Math.floor(lesson.duration / 60)}m ${lesson.duration % 60}s` : 'Video'}
-                                </span>
-                                {lesson.is_free && (
-                                  <span style={{
-                                    fontSize: 8, fontWeight: 700, color: '#10b981',
-                                    background: 'rgba(16,185,129,0.12)', padding: '1px 4px', borderRadius: 4, marginLeft: 4,
-                                  }}>FREE</span>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
         </div>
       </div>
 

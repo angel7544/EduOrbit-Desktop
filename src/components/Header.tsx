@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useTheme } from '../hooks/useTheme';
-import { Bell, ChevronLeft, Flame } from 'lucide-react';
+import { Bell, ChevronLeft, Flame, Sun, Moon } from 'lucide-react';
 import { Avatar } from './Avatar';
+import { supabase } from '../lib/supabase';
 
 interface HeaderProps {
   title?: string;
@@ -34,7 +35,38 @@ export const Header: React.FC<HeaderProps> = ({
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { unreadCount } = useNotificationStore();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, toggleTheme } = useTheme();
+
+  const [showNotifPopup, setShowNotifPopup] = useState(false);
+  const [recentNotifs, setRecentNotifs] = useState<any[]>([]);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifPopup(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (showNotifPopup && user) {
+      const fetchNotifs = async () => {
+        const { data } = await supabase
+          .from('notifications')
+          .select('*')
+          .or(`user_id.eq.${user.id},user_id.is.null`)
+          .order('created_at', { ascending: false })
+          .limit(3);
+        if (data) {
+          setRecentNotifs(data);
+        }
+      };
+      fetchNotifs();
+    }
+  }, [showNotifPopup, user]);
 
   const handleBack = () => {
     if (onBack) {
@@ -90,20 +122,59 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
+        <button
+          onClick={toggleTheme}
+          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors bg-transparent border-none cursor-pointer"
+          title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {isDarkMode ? <Sun size={24} className="text-text" /> : <Moon size={24} className="text-text" />}
+        </button>
+
         {showNotification && (
-          <button
-            className="relative p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors bg-transparent border-none cursor-pointer"
-            onClick={() => navigate('/notifications')}
-          >
-            <Bell size={24} className="text-text" />
-            {unreadCount > 0 && (
-              <div className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-error border-2 border-white flex items-center justify-center px-0.5">
-                <span className="text-white text-[10px] font-bold leading-none">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
+          <div className="relative" ref={notifRef}>
+            <button
+              className="relative p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors bg-transparent border-none cursor-pointer"
+              onClick={() => setShowNotifPopup(!showNotifPopup)}
+            >
+              <Bell size={24} className="text-text" />
+              {unreadCount > 0 && (
+                <div className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-error border-2 border-white flex items-center justify-center px-0.5">
+                  <span className="text-white text-[10px] font-bold leading-none">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                </div>
+              )}
+            </button>
+            
+            {showNotifPopup && (
+              <div className="absolute top-full mt-2 right-0 w-80 bg-white dark:bg-gray-900 border border-border rounded-xl shadow-lg overflow-hidden z-50">
+                <div className="p-3 border-b border-border flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+                  <h3 className="font-bold text-text m-0 text-sm">Recent Notifications</h3>
+                </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {recentNotifs.length > 0 ? (
+                    recentNotifs.map(n => (
+                      <div key={n.id} className="p-3 border-b border-border hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <p className="text-sm font-semibold text-text m-0">{n.title}</p>
+                        <p className="text-xs text-textLight mt-1 mb-0 line-clamp-2">{n.message}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-sm text-textLight">No recent notifications</div>
+                  )}
+                </div>
+                <button
+                  className="w-full p-2 text-primary font-semibold text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-none bg-transparent cursor-pointer"
+                  onClick={() => {
+                    setShowNotifPopup(false);
+                    navigate('/notifications');
+                  }}
+                >
+                  View All Notifications
+                </button>
               </div>
             )}
-          </button>
+          </div>
         )}
 
         {showProfile && (
