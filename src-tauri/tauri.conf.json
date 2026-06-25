@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "eduorbit-desktop",
-  "version": "0.1.0",
-  "identifier": "com.eduorbit.app",
+  "productName": "EduOrbit Desktop",
+  "version": "1.0.0",
+  "identifier": "com.br31tech.eduorbitlms",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "EduOrbit LMS",
+        "title": "EduOrbit Desktop",
         "width": 800,
         "height": 600,
         "resizable": true,

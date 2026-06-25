@@ -8,7 +8,8 @@ import {
   MediaPlayer, 
   MediaProvider, 
   MediaPlayerInstance,
-  MediaTimeUpdateEventDetail
+  MediaTimeUpdateEventDetail,
+  useMediaState
 } from '@vidstack/react';
 import { 
   defaultLayoutIcons, 
@@ -25,14 +26,16 @@ interface VideoPlayerProps {
   onNext?: () => void;
   isCompleted?: boolean;
   onMarkComplete?: () => void;
+  onUnmarkComplete?: () => void;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
   url, isDarkMode, onEnded, 
   hasPrev, hasNext, onPrev, onNext, 
-  isCompleted, onMarkComplete 
+  isCompleted, onMarkComplete, onUnmarkComplete 
 }) => {
   const playerRef = useRef<MediaPlayerInstance>(null);
+  const controlsVisible = useMediaState('controlsVisible', playerRef);
   
   // Watermark state
   const { user } = useAuthStore();
@@ -69,13 +72,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   return (
-    <div className="w-full aspect-video bg-black relative rounded-2xl overflow-hidden shadow-lg group select-none">
+    <div className="w-full aspect-video bg-black relative rounded-2xl overflow-hidden shadow-lg select-none">
       <MediaPlayer
         className="w-full h-full"
         title="Course Video"
         src={url}
         autoPlay
         playsInline
+        fullscreenOrientation="landscape"
+        viewType="video"
+        crossOrigin
         onEnded={onEnded}
         onTimeUpdate={handleTimeUpdate}
         ref={playerRef}
@@ -103,7 +109,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </MediaPlayer>
 
       {/* Custom Action Buttons Overlay (Top Right) */}
-      <div className="absolute top-4 right-4 z-20 flex gap-2 transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+      <div 
+        className={`absolute top-4 right-4 z-20 flex gap-2 transition-opacity duration-300 ${
+          controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
         {hasPrev && (
           <button 
             onClick={onPrev} 
@@ -124,13 +134,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </button>
         )}
 
-        {onMarkComplete && (
+        {(onMarkComplete || onUnmarkComplete) && (
           <button 
-            onClick={onMarkComplete}
-            disabled={isCompleted}
+            onClick={() => {
+              if (isCompleted && onUnmarkComplete) {
+                if (window.confirm("Are you sure you want to unmark this as completed?")) {
+                  onUnmarkComplete();
+                }
+              } else if (!isCompleted && onMarkComplete) {
+                onMarkComplete();
+              }
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-xs font-bold transition-all shadow-lg ${
               isCompleted 
-                ? 'bg-green-500/20 text-green-400 cursor-default' 
+                ? 'bg-green-500/80 hover:bg-red-500/80 text-white cursor-pointer backdrop-blur-md' 
                 : 'bg-primary/80 hover:bg-primary text-white cursor-pointer backdrop-blur-md'
             }`}
           >

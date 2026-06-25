@@ -18,7 +18,7 @@ export default function ChapterPlayerScreen() {
   const route = { params: location.state };
   const navigate = useNavigate();
   const { chapter: initialChapter, chapterId: paramChapterId, lessonId: paramLessonId, courseId, courseTitle: initialCourseTitle, hasAccess: initialHasAccess } = route.params || {};
-  const { courses, markChapterCompleted, progress, loadProgress } = useCourseStore();
+  const { courses, markChapterCompleted, unmarkChapterCompleted, progress, loadProgress } = useCourseStore();
   const { user } = useAuthStore();
   const { isDarkMode } = useTheme();
 
@@ -148,6 +148,13 @@ export default function ChapterPlayerScreen() {
     if (!user || !currentChapter || !hasAccess || isCompleted) return;
     setMarkingComplete(true);
     await markChapterCompleted(courseId, currentChapter.id, user.id);
+    setMarkingComplete(false);
+  };
+
+  const handleUnmarkComplete = async () => {
+    if (!user || !currentChapter || !hasAccess || !isCompleted) return;
+    setMarkingComplete(true);
+    await unmarkChapterCompleted(courseId, currentChapter.id, user.id);
     setMarkingComplete(false);
   };
 
@@ -417,6 +424,7 @@ export default function ChapterPlayerScreen() {
               onNext={() => nextItem && navigateToItem(nextItem)}
               isCompleted={isCompleted}
               onMarkComplete={hasAccess ? handleMarkComplete : undefined}
+              onUnmarkComplete={hasAccess ? handleUnmarkComplete : undefined}
             />
           </div>
 

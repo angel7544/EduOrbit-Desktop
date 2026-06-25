@@ -94,6 +94,7 @@ interface CourseState {
   revokeCourseAccess: (courseId: string, user: AppUser) => Promise<boolean>;
   loadProgress: (courseId: string, userId: string) => Promise<void>;
   markChapterCompleted: (courseId: string, chapterId: string, userId: string) => Promise<void>;
+  unmarkChapterCompleted: (courseId: string, chapterId: string, userId: string) => Promise<void>;
   saveChapterProgress: (courseId: string, chapterId: string, userId: string, progress: Partial<ChapterProgress>) => Promise<void>;
   getCourseProgress: (courseId: string) => number;
 }
@@ -460,6 +461,42 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       });
     } catch (e) {
       console.error('Failed to save progress', e);
+    }
+  },
+  unmarkChapterCompleted: async (courseId, chapterId, userId) => {
+    try {
+      const { error } = await supabase
+        .from('chapter_progress')
+        .upsert({
+          user_id: userId,
+          course_id: courseId,
+          chapter_id: chapterId,
+          is_completed: false,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,chapter_id' });
+
+      if (error) throw error;
+
+      set(state => {
+        const currentProgress = state.progress[courseId] || [];
+        const updated = currentProgress.filter(id => id !== chapterId);
+
+        const currentChapterProgress = state.chapterProgress[courseId] || {};
+        const updatedChapterProgress = {
+          ...currentChapterProgress,
+          [chapterId]: {
+            ...currentChapterProgress[chapterId],
+            is_completed: false
+          }
+        };
+
+        return {
+          progress: { ...state.progress, [courseId]: updated },
+          chapterProgress: { ...state.chapterProgress, [courseId]: updatedChapterProgress }
+        };
+      });
+    } catch (e) {
+      console.error('Failed to unmark progress', e);
     }
   },
   saveChapterProgress: async (courseId, chapterId, userId, progress) => {
