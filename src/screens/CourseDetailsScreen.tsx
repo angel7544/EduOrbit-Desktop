@@ -204,7 +204,8 @@ export default function CourseDetailsScreen() {
                             live_starts_at,
                             live_ends_at,
                             live_status,
-                            attachments (*)
+                            attachments (*),
+                            lessons (*)
                         )
                     `)
                     .eq('id', course.id)
@@ -232,15 +233,34 @@ export default function CourseDetailsScreen() {
         } else {
             setLoading(false);
         }
-    }, [user, course?.id]);
+    }, [user, course?.id, myCourses]);
 
     const checkEnrollment = async () => {
         try {
-            const enrolledCourse = myCourses.find(c => c.id === course.id);
+            let enrolledCourse = myCourses.find(c => c.id === course.id);
+
+            if (!enrolledCourse && user) {
+                const { data: purchaseData, error } = await supabase
+                    .from('purchases')
+                    .select('*')
+                    .eq('course_id', course.id)
+                    .eq('user_id', user.id)
+                    .eq('status', 'success')
+                    .maybeSingle();
+
+                if (purchaseData) {
+                    enrolledCourse = {
+                        ...course,
+                        enrollment: {
+                            expiry_date: purchaseData.expiry_date
+                        }
+                    };
+                }
+            }
 
             if (enrolledCourse) {
                 setIsEnrolled(true);
-                setCourse(enrolledCourse);
+                setCourse((prev: any) => ({ ...prev, ...enrolledCourse }));
 
                 if (enrolledCourse.enrollment?.expiry_date) {
                     const expiryDate = new Date(enrolledCourse.enrollment.expiry_date);
@@ -539,26 +559,55 @@ export default function CourseDetailsScreen() {
                                                                 </ReactMarkdown>
                                                             ) : 'In this lesson, we will cover the foundational concepts related to this topic.'}
                                                         </div>
-                                                        <button
-                                                            className={`w-full py-2.5 rounded-xl flex flex-row justify-center items-center gap-2 border-none transition-all duration-300 font-extrabold text-xs uppercase tracking-wider cursor-pointer ${isEnrolled && !isExpired ? 'bg-primary/10 text-primary hover:bg-primary/15' : (isDarkMode ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-500 cursor-not-allowed')}`}
-                                                            onClick={() => {
-                                                                if (isEnrolled && !isExpired) {
-                                                                    navigate('/chapterplayer', { state: { courseId: course.id, chapterId: chapter.id } });
-                                                                }
-                                                            }}
-                                                        >
-                                                            {isEnrolled && !isExpired ? (
-                                                                <>
-                                                                    <Play size={14} className="text-primary" fill="currentColor" />
-                                                                    <span>Play Lesson</span>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Lock size={14} className={isDarkMode ? 'text-gray-400' : 'text-gray-500'} />
-                                                                    <span>Locked</span>
-                                                                </>
-                                                            )}
-                                                        </button>
+                                                        {(!chapter.lessons || chapter.lessons.length === 0 || chapter.video_url) && (
+                                                            <button
+                                                                className={`w-full py-2.5 rounded-xl flex flex-row justify-center items-center gap-2 border-none transition-all duration-300 font-extrabold text-xs uppercase tracking-wider cursor-pointer ${isEnrolled && !isExpired ? 'bg-primary/10 text-primary hover:bg-primary/15' : (isDarkMode ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-500 cursor-not-allowed')}`}
+                                                                onClick={() => {
+                                                                    if (isEnrolled && !isExpired) {
+                                                                        navigate('/chapterplayer', { state: { courseId: course.id, chapterId: chapter.id } });
+                                                                    }
+                                                                }}
+                                                            >
+                                                                {isEnrolled && !isExpired ? (
+                                                                    <>
+                                                                        <Play size={14} className="text-primary" fill="currentColor" />
+                                                                        <span>Play {chapter.lessons && chapter.lessons.length > 0 ? 'Chapter Video' : 'Lesson'}</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Lock size={14} className={isDarkMode ? 'text-gray-400' : 'text-gray-500'} />
+                                                                        <span>Locked</span>
+                                                                    </>
+                                                                )}
+                                                            </button>
+                                                        )}
+                                                        {chapter.lessons && chapter.lessons.length > 0 && (
+                                                            <div className="mt-4 flex flex-col gap-2">
+                                                                {chapter.lessons.sort((a: any, b: any) => (a.position || 0) - (b.position || 0)).map((lesson: any, lIndex: number) => (
+                                                                    <div key={lesson.id} className={`flex items-center justify-between p-3 rounded-lg border ${isDarkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className={`w-6 h-6 rounded-full flex justify-center items-center ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                                                                                <span className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{lIndex + 1}</span>
+                                                                            </div>
+                                                                            <div>
+                                                                                <span className={`text-sm font-bold block ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{lesson.title}</span>
+                                                                                <span className={`text-[10px] block ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{formatDuration(lesson.duration || 0)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (isEnrolled && !isExpired) {
+                                                                                    navigate('/chapterplayer', { state: { courseId: course.id, chapterId: chapter.id, lessonId: lesson.id } });
+                                                                                }
+                                                                            }}
+                                                                            className={`px-3 py-1.5 border-none cursor-pointer rounded-lg text-xs font-bold transition-colors ${isEnrolled && !isExpired ? 'bg-primary/10 text-primary hover:bg-primary/20' : (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-400 cursor-not-allowed')}`}
+                                                                        >
+                                                                            Play
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>

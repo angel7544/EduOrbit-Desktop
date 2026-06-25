@@ -9,6 +9,20 @@ export interface AttachmentItem {
   file_type: string;
 }
 
+export interface LessonItem {
+  id: string;
+  chapter_id: string;
+  title: string;
+  description?: string;
+  video_url?: string;
+  duration?: number;
+  position?: number;
+  is_published?: boolean;
+  is_free?: boolean;
+  attachments?: any[];
+  created_at?: string;
+}
+
 export interface ChapterItem {
   description: string;
   id: string;
@@ -25,6 +39,7 @@ export interface ChapterItem {
   attachments?: AttachmentItem[];
   allow_download?: boolean;
   is_published?: boolean;
+  lessons?: LessonItem[];
 }
 
 export interface CourseItem {
@@ -163,7 +178,8 @@ export const useCourseStore = create<CourseState>((set, get) => ({
             live_starts_at,
             live_ends_at,
             live_status,
-            attachments (*)
+            attachments (*),
+            lessons (*)
           )
         `
         )
