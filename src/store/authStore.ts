@@ -155,7 +155,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: 'https://courses.br31tech.live/login',
+          emailRedirectTo: `${window.location.origin}/login`,
           shouldCreateUser: true,
         },
       });
@@ -298,7 +298,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'lmseduorbitapp://reset-password',
+        redirectTo: `${window.location.origin}/resetpassword`,
       });
       if (error) throw error;
       set({ loading: false, error: null });
