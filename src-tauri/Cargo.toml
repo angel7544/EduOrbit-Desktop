@@ -1,8 +1,8 @@
 [package]
 name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+version = "1.5.0"
+description = "EduOrbit Desktop"
+authors = ["BR31Tech"]
 license = ""
 repository = ""
 edition = "2021"

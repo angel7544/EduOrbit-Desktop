@@ -155,7 +155,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: 'lmseduorbitapp://login',
+          emailRedirectTo: 'https://courses.br31tech.live/login',
           shouldCreateUser: true,
         },
       });
