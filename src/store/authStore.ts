@@ -71,6 +71,8 @@ async function fetchUserProfile(userId: string): Promise<AppUser | null> {
   };
 }
 
+let isAuthListenerSet = false;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: false,
@@ -78,6 +80,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   error: null,
   initialize: async () => {
     set({ loading: true, error: null });
+
+    if (!isAuthListenerSet) {
+      isAuthListenerSet = true;
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'PASSWORD_RECOVERY') {
+          if (session) {
+            const profile = await fetchUserProfile(session.user.id);
+            const appUser: AppUser = {
+              id: session.user.id,
+              name: profile?.name ?? session.user.user_metadata?.name ?? null,
+              email: profile?.email ?? session.user.email ?? null,
+              role: profile?.role ?? session.user.user_metadata?.role ?? null,
+              profileImage: profile?.profileImage ?? session.user.user_metadata?.profile_image ?? null,
+              phone: profile?.phone ?? session.user.user_metadata?.phone ?? null,
+              address: profile?.address ?? session.user.user_metadata?.address ?? null,
+              bio: profile?.bio ?? session.user.user_metadata?.bio ?? null,
+              class_name: profile?.class_name ?? session.user.user_metadata?.class_name ?? null,
+              streak_count: profile?.streak_count ?? session.user.user_metadata?.streak_count ?? 1,
+              user_metadata: session.user.user_metadata
+            };
+            set({ user: appUser, loading: false, isInitialized: true, error: null });
+          }
+        } else if (event === 'SIGNED_OUT') {
+          set({ user: null, loading: false, isInitialized: true, error: null });
+        }
+      });
+    }
+
     try {
       const {
         data: { session },
@@ -85,7 +115,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } = await supabase.auth.getSession();
 
       if (error || !session?.user) {
-        set({ user: null, loading: false, isInitialized: true, error: null });
+        // Only set initialized if we don't already have a user from the listener
+        if (!get().user) {
+          set({ user: null, loading: false, isInitialized: true, error: null });
+        }
         return;
       }
 
@@ -109,7 +142,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (e: any) {
       const message =
         typeof e?.message === 'string' ? e.message : 'Failed to initialize session';
-      set({ user: null, loading: false, isInitialized: true, error: message });
+      if (!get().user) {
+        set({ user: null, loading: false, isInitialized: true, error: message });
+      }
     }
   },
   signInWithEmail: async (email, password) => {
