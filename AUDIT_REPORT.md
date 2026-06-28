@@ -49,45 +49,45 @@ The core architectural choices are highly scalable:
 
 ---
 
-## 🔒 3. Application Security Threats | सुरक्षा और खतरे
+## 🔒 3. Deep Scan: Critical Security & Performance Threats | सुरक्षा और खतरे
 
-While the architecture documents mention a "Backend Proxy" which is excellent, here are standard LMS threats you must verify across Web, Desktop, and Mobile:
+After conducting a deep scan of your actual source code (`src/store/authStore.ts`, `.env.example`, and `.sql` policies), I found **CRITICAL** vulnerabilities that contradict the initial architectural assumptions. These must be fixed immediately before production:
 
-### 1. Supabase RLS (Row Level Security) Misconfigurations
-- **Threat:** If RLS is slightly misconfigured, a student could read another student's test scores, or worse, access premium course content without paying.
-- **Risk:** Critical. 
-- **Hinglish:** RLS agar theek se set nahi hai (e.g., `has_paid = true`), toh hacker ya normal user API manipulate karke free me premium course dekh sakta hai.
-- **Fix:** Write strict test cases for Supabase RLS policies. Ensure `setup_rls.sql` restricts reads entirely unless the user ID matches or the course is actively purchased.
+### 🚨 1. CRITICAL: Client-Side Privilege Escalation (authStore.ts)
+- **Threat:** In `src/store/authStore.ts` (Lines ~267-274), the `signUpWithEmail` function accepts a `role` from the frontend and directly upserts it into the `users` table via `supabase.from('users').upsert({...role})`. A malicious user can intercept the API request (or use the console) to pass `role: "admin"`, granting themselves full admin access to the entire platform.
+- **Risk:** Critical (Complete System Compromise). 
+- **Hinglish:** Frontend code seedha database me `role` bhej raha hai (student/admin). Koi bhi thoda sa smart user API modify karke khud ko "admin" bana sakta hai!
+- **Fix:** Remove `role` from the frontend upsert. Roles MUST be assigned securely on the backend (e.g., via a secure Supabase Edge Function or a database trigger on `auth.users`), and the default should strictly be `student`.
 
-### 2. Vercel Serverless DDoS & Rate Limiting
-- **Threat:** On the Hobby plan, anyone can spam your Vercel API routes (e.g., Login endpoints, OTP endpoints).
-- **Risk:** High.
-- **Hinglish:** Koi malicious script laga kar aapke serverless functions ko spam kar sakta hai, jisse limit khatam ho jayegi aur asli bachhon ke liye app down ho jayegi.
-- **Fix:** Implement API Rate Limiting (e.g., using Upstash/Redis) on all public-facing backend proxy routes.
+### 🚨 2. CRITICAL: RLS Performance Bottleneck (N+1 Query Issue)
+- **Threat:** In `chat_rls_policies.sql` and others, your policies use subqueries like `(SELECT role FROM users WHERE id = auth.uid()) = 'admin'`. In PostgreSQL, this subquery runs for **EVERY SINGLE ROW** returned by a query. If a chat query returns 10,000 messages, it triggers 10,000 subqueries. This will instantly max out your 200 DB connections and crash the app.
+- **Risk:** High (Guaranteed Database Crash at Scale).
+- **Hinglish:** Database policies me har row ke liye user ka role check ho raha hai. Agar 10,000 chat messages load honge, toh backend 10,000 baar role check karega jisse server crash ho jayega.
+- **Fix:** Use **Supabase Custom JWT Claims**. Inject the user's role into the JWT token upon login, so you can check it instantly in RLS via `(auth.jwt() ->> 'role') = 'admin'` without hitting the database again.
 
-### 3. Desktop App (Tauri) Memory Reading & Video Piracy
-- **Threat:** Tauri is secure by default, but smart users can use memory-dump tools or network sniffers (like Wireshark) on Windows/Mac to grab Bunny.net HLS URLs.
-- **Risk:** Medium. 
-- **Hinglish:** Desktop pe video piracy rokna thoda mushkil hota hai. Screen recording blockers web-views (Tauri) me 100% perfectly kaam nahi karte.
-- **Fix:** Use strict DRM (like Widevine/FairPlay) via Bunny.net instead of just Signed URLs if the content is highly premium. Bind the signed URLs to the user's IP address.
-
-### 4. JWT Token Theft (XSS in Admin Panel)
-- **Threat:** If the Web Admin panel is vulnerable to Cross-Site Scripting (XSS) via course descriptions or forum posts, an admin's session can be stolen.
-- **Fix:** Ensure Supabase session cookies are configured securely. Sanitize all user inputs (like course comments or reviews) before rendering them in the React Web App/Admin Panel.
+### ⚠️ 3. HIGH: Potential Secret Leakage in Frontend (.env.example)
+- **Threat:** Your `.env.example` defines `EXPO_PUBLIC_CLOUDINARY_API_SECRET`. Any variable prefixed with `EXPO_PUBLIC_` or `VITE_` is automatically injected into the frontend Javascript bundle by Vite/Expo.
+- **Risk:** High. If a developer uses this pattern in production, anyone can extract the Cloudinary API Secret from the compiled app and delete or replace all your course thumbnails/attachments.
+- **Hinglish:** `.env` file me API Secret ko `EXPO_PUBLIC_` naam se rakha gaya hai. Aisa karne se secret seedha app ke code me chala jayega aur koi bhi hacker aapki saari images delete kar sakta hai.
+- **Fix:** Remove the secret from `.env.example`. The frontend should NEVER need the Cloudinary Secret. It should only need the Upload Preset (which is public) or upload via your secure backend.
 
 ---
 
 ## 📈 4. Recommendations to Scale | स्केल करने के लिए सुझाव
 
-1. **Immediate Infrastructure Action:** 
+1. **Immediate Codebase Fixes:**
+   - Refactor `authStore.ts` immediately. Never trust the frontend to dictate its own privileges.
+   - Refactor all `.sql` RLS policies to use Custom JWT Claims instead of `SELECT` subqueries to fix the N+1 performance disaster.
+
+2. **Immediate Infrastructure Action:** 
    - **Upgrade Supabase to Pro Plan ($25/mo):** This is non-negotiable before a big launch. It solves database connection limits, gives you daily backups, and removes bandwidth bottlenecks.
    - **Upgrade Vercel to Pro ($20/mo):** Required for commercial compliance, avoiding 10s timeouts, and unlocking more compute hours.
    - **Hinglish:** Sabse pehle Supabase ko Pro par daalein warna peak hours (jab sabhi students shaam ko padhne aayenge) par "Database Connection limit reached" error aayega.
 
-2. **Backend Proxy Hardening:** 
+3. **Backend Proxy Hardening:** 
    Verify that your mobile/desktop apps NEVER directly communicate with Razorpay. The `RAZORPAY_KEY_SECRET` must strictly live in Vercel/Supabase Edge Functions.
 
-3. **Bunny.net Token Expiry:**
+4. **Bunny.net Token Expiry:**
    Ensure Token Authentication for videos has a very short expiry (e.g., 1 to 2 hours maximum).
    - **Hinglish:** Bunny.net me secure token expiry ko kam rakhein, taaki koi link copy karke apne dosto ko Telegram par share na kar paye. Link expire ho jana chahiye.
 
