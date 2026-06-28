@@ -58,7 +58,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         window.clearInterval(watermarkIntervalRef.current);
       }
     };
-  }, [user]);
+  }, [user?.id]);
 
   const handleTimeUpdate = (detail: MediaTimeUpdateEventDetail) => {
     const time = detail.currentTime;

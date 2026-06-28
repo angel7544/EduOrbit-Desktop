@@ -39,8 +39,8 @@ export default function ChapterPlayerScreen() {
   };
 
   useEffect(() => {
-    if (user && courseId) loadProgress(courseId, user.id);
-  }, [courseId, user, loadProgress]);
+    if (user?.id && courseId) loadProgress(courseId, user.id);
+  }, [courseId, user?.id, loadProgress]);
 
   const isCompleted = useMemo(() => {
     if (!currentChapter) return false;
@@ -93,7 +93,7 @@ export default function ChapterPlayerScreen() {
       }
     };
     loadData();
-  }, [initialChapter, paramChapterId, courseId, user, initialHasAccess]);
+  }, [initialChapter, paramChapterId, courseId, user?.id, initialHasAccess]);
 
   const course = useMemo(() => courses.find(c => c.id === courseId), [courses, courseId]);
   const sortedChapters = useMemo(() => {
