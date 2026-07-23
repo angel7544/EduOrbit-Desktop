@@ -179,6 +179,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
             live_starts_at,
             live_ends_at,
             live_status,
+            is_published,
             attachments (*),
             lessons (*)
           )
@@ -209,8 +210,15 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       const list: CourseItem[] = Array.isArray(data)
         ? data.map((item: any) => {
           const stats = reviewStats[item.id] || { total: 0, count: 0 };
+          const filteredChapters = (item.chapters || [])
+            .filter((ch: any) => ch.is_published !== false)
+            .map((ch: any) => ({
+              ...ch,
+              lessons: (ch.lessons || []).filter((l: any) => l.is_published !== false)
+            }));
           return {
             ...item,
+            chapters: filteredChapters,
             teacher: Array.isArray(item.teacher) ? item.teacher[0] : item.teacher,
             rating: stats.count > 0 ? Number((stats.total / stats.count).toFixed(1)) : 4.5,
             reviewsCount: stats.count
@@ -256,7 +264,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
               name,
               profile_image
             ),
-            chapters (id, duration)
+            chapters (id, duration, is_published)
           )
         `
         )
@@ -295,8 +303,12 @@ export const useCourseStore = create<CourseState>((set, get) => ({
             const status = isExpired ? 'expired' : (row.subscription_status || 'active');
             const stats = reviewStats[row.course.id] || { total: 0, count: 0 };
 
+            const filteredChapters = (row.course.chapters || [])
+              .filter((ch: any) => ch.is_published !== false);
+
             courses.push({
               ...row.course,
+              chapters: filteredChapters,
               enrollment: {
                 expiry_date: row.expiry_date,
                 subscription_status: status,

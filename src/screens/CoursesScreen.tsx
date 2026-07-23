@@ -151,15 +151,14 @@ export default function CoursesScreen() {
   useEffect(() => {
     const list: CourseListItem[] = Array.isArray(courses)
       ? courses.map((course: any) => {
-        const lessons = Array.isArray(course.chapters)
-          ? course.chapters.length
-          : 0;
+        const publishedChapters = (course.chapters || []).filter((ch: any) => ch.is_published !== false);
+        const lessons = publishedChapters.length;
         const isFree = !course.price || course.price === 0;
         const priceLabel = isFree
           ? 'Free'
           : `₹${currencyFormater(Number(course.price || 0))} `;
 
-        const totalSeconds = (course.chapters || []).reduce((sum: number, ch: any) => sum + (ch.duration || 0), 0);
+        const totalSeconds = publishedChapters.reduce((sum: number, ch: any) => sum + (ch.duration || 0), 0);
         const duration = formatDuration(totalSeconds);
 
         const enrolledCourse = myCourses.find((c: any) => c.id === course.id);

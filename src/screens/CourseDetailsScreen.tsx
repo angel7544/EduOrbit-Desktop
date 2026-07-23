@@ -204,6 +204,7 @@ export default function CourseDetailsScreen() {
                             live_starts_at,
                             live_ends_at,
                             live_status,
+                            is_published,
                             attachments (*),
                             lessons (*)
                         )
@@ -213,8 +214,15 @@ export default function CourseDetailsScreen() {
 
                 if (error) throw error;
                 if (data) {
+                    const filteredChapters = (data.chapters || [])
+                        .filter((ch: any) => ch.is_published !== false)
+                        .map((ch: any) => ({
+                            ...ch,
+                            lessons: (ch.lessons || []).filter((l: any) => l.is_published !== false)
+                        }));
                     const normalized = {
                         ...data,
+                        chapters: filteredChapters,
                         teacher: Array.isArray(data.teacher) ? data.teacher[0] : data.teacher
                     };
                     setCourse((prev: any) => ({ ...prev, ...normalized }));
@@ -342,8 +350,9 @@ export default function CourseDetailsScreen() {
 
     if (!course) return null;
 
-    const totalLessons = course.chapters?.length || 0;
-    const totalSeconds = (course.chapters || []).reduce((sum: number, ch: any) => sum + (ch.duration || 0), 0);
+    const publishedChapters = (course.chapters || []).filter((ch: any) => ch.is_published !== false);
+    const totalLessons = publishedChapters.length;
+    const totalSeconds = publishedChapters.reduce((sum: number, ch: any) => sum + (ch.duration || 0), 0);
     const duration = formatDuration(totalSeconds);
     const enrolledStudents = parseInt(course.purchases_count?.toString() || course.enrollments_count?.toString() || '0', 10);
     const rating = course.rating || 4.5;
@@ -358,13 +367,13 @@ export default function CourseDetailsScreen() {
     };
 
     // Compile specific tab items
-    const regularChapters = (course.chapters || [])
+    const regularChapters = publishedChapters
         .filter((ch: any) => !ch.is_live)
         .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
-    const liveChapters = (course.chapters || [])
+    const liveChapters = publishedChapters
         .filter((ch: any) => ch.is_live)
         .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
-    const allAttachments = (course.chapters || []).reduce((acc: any[], chapter: any) => {
+    const allAttachments = publishedChapters.reduce((acc: any[], chapter: any) => {
         if (Array.isArray(chapter.attachments)) {
             chapter.attachments.forEach((att: any) => {
                 if (!acc.some(existing => existing.id === att.id)) {
@@ -581,9 +590,12 @@ export default function CourseDetailsScreen() {
                                                                 )}
                                                             </button>
                                                         )}
-                                                        {chapter.lessons && chapter.lessons.length > 0 && (
+                                                        {chapter.lessons && chapter.lessons.filter((l: any) => l.is_published !== false).length > 0 && (
                                                             <div className="mt-4 flex flex-col gap-2">
-                                                                {chapter.lessons.sort((a: any, b: any) => (a.position || 0) - (b.position || 0)).map((lesson: any, lIndex: number) => (
+                                                                {chapter.lessons
+                                                                    .filter((l: any) => l.is_published !== false)
+                                                                    .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
+                                                                    .map((lesson: any, lIndex: number) => (
                                                                     <div key={lesson.id} className={`flex items-center justify-between p-3 rounded-lg border ${isDarkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                                                                         <div className="flex items-center gap-3">
                                                                             <div className={`w-6 h-6 rounded-full flex justify-center items-center ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>

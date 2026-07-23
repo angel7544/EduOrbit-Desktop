@@ -385,12 +385,13 @@ export default function DashboardScreen() {
   // Continue learning — most recent enrolled courses
   const continueLearning = myCourses.slice(0, 4);
   const activeCourse = continueLearning[0];
+  const activeCourseChapters = activeCourse?.chapters?.filter((ch: any) => ch.is_published !== false) || [];
   const activeProgress = activeCourse
-    ? (activeCourse.chapters?.length ? Math.round(((progress?.[activeCourse.id]?.length || 0) / activeCourse.chapters.length) * 100) : 0)
+    ? (activeCourseChapters.length ? Math.round(((progress?.[activeCourse.id]?.length || 0) / activeCourseChapters.length) * 100) : 0)
     : 0;
 
   // Calculate combined course progress
-  const totalChapters = myCourses.reduce((sum, c) => sum + (c.chapters?.length || 0), 0);
+  const totalChapters = myCourses.reduce((sum, c) => sum + (c.chapters?.filter((ch: any) => ch.is_published !== false).length || 0), 0);
   const completedChapters = myCourses.reduce((sum, c) => sum + (progress[c.id]?.length || 0), 0);
   const combinedProgress = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
@@ -623,7 +624,7 @@ export default function DashboardScreen() {
                         </p>
                         <p style={{ fontSize: 12, color: textMuted, margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <BookOpen size={14} /> 
-                          {progress?.[activeCourse.id]?.length || 0} / {activeCourse.chapters?.length || 0} lessons completed
+                          {progress?.[activeCourse.id]?.length || 0} / {activeCourseChapters.length} lessons completed
                         </p>
                       </div>
                       <button
@@ -643,8 +644,9 @@ export default function DashboardScreen() {
                 {/* Remaining courses list */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {continueLearning.slice(1, 4).map(course => {
-                    const pct = course.chapters?.length
-                      ? Math.round(((progress?.[course.id]?.length || 0) / course.chapters.length) * 100)
+                    const publishedChs = course.chapters?.filter((ch: any) => ch.is_published !== false) || [];
+                    const pct = publishedChs.length
+                      ? Math.round(((progress?.[course.id]?.length || 0) / publishedChs.length) * 100)
                       : 0;
                     return (
                       <div

@@ -51,11 +51,12 @@ export default function MyCoursesScreen() {
     const list: CourseListItem[] = Array.isArray(myCourses)
       ? myCourses.map((course: any) => {
         const completedCount = progress[course.id]?.length || 0;
-        const totalCount = course.chapters?.length || 0;
+        const publishedChapters = (course.chapters || []).filter((ch: any) => ch.is_published !== false);
+        const totalCount = publishedChapters.length;
         const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
         const isCompleted = percentage === 100;
 
-        const totalSeconds = (course.chapters || []).reduce((sum: number, ch: any) => sum + (ch.duration || 0), 0);
+        const totalSeconds = publishedChapters.reduce((sum: number, ch: any) => sum + (ch.duration || 0), 0);
         const duration = formatDuration(totalSeconds);
 
         let expiryInfo = '';

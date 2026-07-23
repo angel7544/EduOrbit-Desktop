@@ -61,7 +61,10 @@ export default function ChapterPlayerScreen() {
           .single();
 
         if (error) throw error;
-        if (chapter) setCurrentChapter(chapter);
+        if (chapter) {
+          const filteredLessons = (chapter.lessons || []).filter((l: any) => l.is_published !== false);
+          setCurrentChapter({ ...chapter, lessons: filteredLessons });
+        }
 
         const { data: courseData } = await supabase
           .from('courses')
@@ -70,7 +73,13 @@ export default function ChapterPlayerScreen() {
           .single();
 
         if (courseData) {
-          setCurrentCourse(courseData);
+          const filteredChapters = (courseData.chapters || [])
+            .filter((ch: any) => ch.is_published !== false)
+            .map((ch: any) => ({
+              ...ch,
+              lessons: (ch.lessons || []).filter((l: any) => l.is_published !== false)
+            }));
+          setCurrentCourse({ ...courseData, chapters: filteredChapters });
           setCourseTitle(courseData.title);
         }
 
@@ -98,7 +107,10 @@ export default function ChapterPlayerScreen() {
   const course = useMemo(() => courses.find(c => c.id === courseId), [courses, courseId]);
   const sortedChapters = useMemo(() => {
     const source = currentCourse || course;
-    return source?.chapters ? [...source.chapters].sort((a: any, b: any) => (a.position || 0) - (b.position || 0)) : [];
+    if (!source?.chapters) return [];
+    return [...source.chapters]
+      .filter((ch: any) => ch.is_published !== false)
+      .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
   }, [course, currentCourse]);
 
   const playableItems = useMemo(() => {
@@ -108,7 +120,9 @@ export default function ChapterPlayerScreen() {
         items.push({ type: 'chapter', chapter: ch });
       }
       if (ch.lessons && ch.lessons.length > 0) {
-        const sortedLessons = [...ch.lessons].sort((a:any, b:any) => (a.position||0) - (b.position||0));
+        const sortedLessons = [...ch.lessons]
+          .filter((l: any) => l.is_published !== false)
+          .sort((a:any, b:any) => (a.position||0) - (b.position||0));
         sortedLessons.forEach(l => {
           items.push({ type: 'lesson', chapter: ch, lesson: l });
         });
@@ -349,11 +363,14 @@ export default function ChapterPlayerScreen() {
 
                   {hasLessons && isExpanded && (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      {[...ch.lessons].sort((a:any, b:any) => (a.position||0) - (b.position||0)).map((lesson: any) => {
-                        const isLessonActive = currentLessonId === lesson.id;
-                        const isLessonLocked = !lesson.is_free && !hasAccess;
+                      {[...ch.lessons]
+                        .filter((l: any) => l.is_published !== false)
+                        .sort((a:any, b:any) => (a.position||0) - (b.position||0))
+                        .map((lesson: any) => {
+                          const isLessonActive = currentLessonId === lesson.id;
+                          const isLessonLocked = !lesson.is_free && !hasAccess;
 
-                        return (
+                          return (
                           <button
                             key={lesson.id}
                             onClick={() => navigateToItem({ type: 'lesson', chapter: ch, lesson })}
