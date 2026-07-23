@@ -27,12 +27,14 @@ interface VideoPlayerProps {
   isCompleted?: boolean;
   onMarkComplete?: () => void;
   onUnmarkComplete?: () => void;
+  videoKey?: string;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
   url, isDarkMode, onEnded, 
   hasPrev, hasNext, onPrev, onNext, 
-  isCompleted, onMarkComplete, onUnmarkComplete 
+  isCompleted, onMarkComplete, onUnmarkComplete,
+  videoKey
 }) => {
   const playerRef = useRef<MediaPlayerInstance>(null);
   const controlsVisible = useMediaState('controlsVisible', playerRef);
@@ -60,15 +62,46 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [user?.id]);
 
+  const lastSeekedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    lastSeekedKeyRef.current = null;
+  }, [videoKey]);
+
   const handleTimeUpdate = (detail: MediaTimeUpdateEventDetail) => {
     const time = detail.currentTime;
     const duration = playerRef.current?.state.duration || 0;
     
+    if (videoKey && duration > 0 && time > 0) {
+      if (time / duration >= 0.97 || duration - time < 5) {
+        localStorage.removeItem(`video_progress_${videoKey}`);
+      } else {
+        localStorage.setItem(`video_progress_${videoKey}`, time.toString());
+      }
+    }
+
     if (duration > 0 && !isCompleted && onMarkComplete) {
       if (time / duration >= 0.9) {
         onMarkComplete();
       }
     }
+  };
+
+  const handleCanPlay = () => {
+    if (!videoKey || lastSeekedKeyRef.current === videoKey) return;
+    const savedTime = localStorage.getItem(`video_progress_${videoKey}`);
+    const time = savedTime ? parseFloat(savedTime) : 0;
+    if (time > 0 && playerRef.current) {
+      playerRef.current.currentTime = time;
+      lastSeekedKeyRef.current = videoKey;
+    }
+  };
+
+  const handleEnded = () => {
+    if (videoKey) {
+      localStorage.removeItem(`video_progress_${videoKey}`);
+    }
+    if (onEnded) onEnded();
   };
 
   return (
@@ -82,8 +115,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         fullscreenOrientation="landscape"
         viewType="video"
         crossOrigin
-        onEnded={onEnded}
+        onEnded={handleEnded}
         onTimeUpdate={handleTimeUpdate}
+        onCanPlay={handleCanPlay}
         ref={playerRef}
       >
         <MediaProvider>

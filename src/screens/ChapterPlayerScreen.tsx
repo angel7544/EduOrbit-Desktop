@@ -429,6 +429,7 @@ export default function ChapterPlayerScreen() {
           <div style={{ position: 'relative', background: '#000', flexShrink: 0, maxHeight: '65vh' }}>
             <VideoPlayer
               url={(currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.video_url : currentChapter?.video_url) || ''}
+              videoKey={`${user?.id || 'guest'}_${courseId}_${currentChapter?.id || ''}${currentLessonId ? `_${currentLessonId}` : ''}`}
               isDarkMode={isDarkMode}
               onEnded={() => {
                 if (user && hasAccess && !isCompleted) {
