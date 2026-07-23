@@ -233,7 +233,7 @@ export default function PurchaseScreen() {
       currency: orderData.currency || 'INR',
       name: 'EduOrbit LMS',
       description: courseTitle,
-      image: 'https://br31tech.live/logo.png',
+      image: 'https://br31tech.in/logo.png',
       order_id: orderData.orderId,
       handler: async function (response: any) {
         await verifyPurchase(response);

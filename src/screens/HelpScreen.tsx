@@ -34,7 +34,7 @@ export default function HelpScreen() {
             </button>
 
             <a 
-                href="mailto:support@br31tech.live"
+                href="mailto:support@br31tech.in"
                 className="flex flex-row items-center py-3 border-b border-border bg-transparent cursor-pointer no-underline last:border-b-0" 
             >
               <div className="w-12 h-12 rounded-full flex justify-center items-center mr-4 bg-green-50">
@@ -42,7 +42,7 @@ export default function HelpScreen() {
               </div>
               <div className="flex-1">
                 <h3 className="text-base font-semibold mb-0.5 text-text m-0">Email Support</h3>
-                <p className="text-sm text-textLight m-0">support@br31tech.live</p>
+                <p className="text-sm text-textLight m-0">support@br31tech.in</p>
               </div>
             </a>
 
@@ -60,7 +60,7 @@ export default function HelpScreen() {
             </a>
 
             <a 
-                href="https://br31tech.live/products/"
+                href="https://br31tech.in/products/"
                 target="_blank" rel="noreferrer"
                 className="flex flex-row items-center py-3 bg-transparent cursor-pointer no-underline" 
             >
@@ -69,7 +69,7 @@ export default function HelpScreen() {
               </div>
               <div className="flex-1">
                 <h3 className="text-base font-semibold mb-0.5 text-text m-0">Website</h3>
-                <p className="text-sm text-textLight m-0">www.br31tech.live</p>
+                <p className="text-sm text-textLight m-0">www.br31tech.in</p>
               </div>
             </a>
           </div>

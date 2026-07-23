@@ -329,10 +329,10 @@ export default function CourseDetailsScreen() {
                 await navigator.share({
                     title: course.title,
                     text: `Check out this course: ${course.title}`,
-                    url: `https://lms.br31tech.live/course/${course.id}`,
+                    url: `https://lms.br31tech.in/course/${course.id}`,
                 });
             } else {
-                navigator.clipboard.writeText(`https://lms.br31tech.live/course/${course.id}`);
+                navigator.clipboard.writeText(`https://lms.br31tech.in/course/${course.id}`);
                 alert('Link copied to clipboard!');
             }
         } catch (error: any) {

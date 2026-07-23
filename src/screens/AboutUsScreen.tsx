@@ -11,7 +11,7 @@ export default function AboutUsScreen() {
       <div className="p-5 flex-1 overflow-y-auto max-w-4xl mx-auto w-full">
         <div className="flex justify-center my-8">
             <img 
-                src="https://br31tech.live/logo.png" 
+                src="https://br31tech.in/logo.png" 
                 alt="Logo"
                 className="w-24 h-24 rounded-2xl object-contain"
             />
@@ -32,7 +32,7 @@ export default function AboutUsScreen() {
         
         <div className="mt-10 flex flex-col items-center gap-2">
           <span className="text-sm text-textLight">Developed by</span>
-          <a href="https://br31tech.live" target="_blank" rel="noreferrer" className="text-base font-semibold text-primary no-underline">
+          <a href="https://br31tech.in" target="_blank" rel="noreferrer" className="text-base font-semibold text-primary no-underline">
             BR31 Technologies
           </a>
           

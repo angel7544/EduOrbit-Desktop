@@ -8,7 +8,7 @@ const FAQS = [
   { question: 'How do I reset my password?', answer: 'You can reset your password by going to the login screen and clicking on "Forgot Password". Follow the instructions sent to your email.' },
   { question: 'How do I access my courses?', answer: 'Once logged in, your purchased courses will appear in the "My Learning" tab on the dashboard or under "My Purchases" in your profile.' },
   { question: 'Can I download videos for offline viewing?', answer: 'Currently, offline viewing is supported for specific EduOrbit LMS courses. Look for the download icon next to the video player.' },
-  { question: 'How do I contact support?', answer: 'You can contact support via the "Chat Support" option in your profile or email us at support@br31tech.live.' },
+  { question: 'How do I contact support?', answer: 'You can contact support via the "Chat Support" option in your profile or email us at support@br31tech.in.' },
   { question: 'What payment methods do you accept?', answer: 'We accept credit/debit cards, UPI, and net banking. All payments are processed securely.' },
   { question: 'Can I get a refund?', answer: 'Refunds are available within 7 days of purchase if you have not watched more than 20% of the course content. Please contact support for assistance.' }
 ];
