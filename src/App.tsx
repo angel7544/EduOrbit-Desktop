@@ -58,6 +58,43 @@ export default function App() {
     }
   }, [isDarkMode]);
 
+  // Anti-Inspect and Anti-Piracy Security protections
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // F12 key
+      if (e.key === 'F12' || e.keyCode === 123) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      // Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U, Ctrl+S, Cmd equivalents
+      if (e.ctrlKey || e.metaKey) {
+        const key = e.key ? e.key.toLowerCase() : '';
+        if (
+          (e.shiftKey && (key === 'i' || key === 'j' || key === 'c')) ||
+          key === 'u' ||
+          key === 's'
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   return (
     <div
       style={{
