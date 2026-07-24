@@ -27,7 +27,7 @@ export default function ChapterPlayerScreen() {
   const [currentCourse, setCurrentCourse] = useState<any>(null);
   const [courseTitle, setCourseTitle] = useState<string>(initialCourseTitle || '');
   const [hasAccess, setHasAccess] = useState<boolean>(initialHasAccess || false);
-  const [loading, setLoading] = useState(!initialChapter);
+  const [loading, setLoading] = useState(true);
   const [markingComplete, setMarkingComplete] = useState(false);
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>(() => {
     return initialChapter ? { [initialChapter.id]: true } : {};
@@ -42,6 +42,15 @@ export default function ChapterPlayerScreen() {
     if (user?.id && courseId) loadProgress(courseId, user.id);
   }, [courseId, user?.id, loadProgress]);
 
+  useEffect(() => {
+    if (currentChapter?.id) {
+      setExpandedChapters(prev => ({
+        ...prev,
+        [currentChapter.id]: true
+      }));
+    }
+  }, [currentChapter?.id]);
+
   const isCompleted = useMemo(() => {
     if (!currentChapter) return false;
     return progress[courseId]?.includes(currentChapter.id) || false;
@@ -49,41 +58,78 @@ export default function ChapterPlayerScreen() {
 
   useEffect(() => {
     const loadData = async () => {
-      if (!initialChapter) setLoading(true);
+      setLoading(true);
       try {
+        if (!courseId && !paramChapterId && !initialChapter?.id) {
+          setLoading(false);
+          return;
+        }
+
+        let fetchedChapters: any[] = [];
+
+        if (courseId) {
+          const { data: courseData, error: courseErr } = await supabase
+            .from('courses')
+            .select('*, chapters(*, attachments(*), lessons(*))')
+            .eq('id', courseId)
+            .single();
+
+          if (courseData) {
+            fetchedChapters = (courseData.chapters || [])
+              .filter((ch: any) => ch.is_published !== false)
+              .map((ch: any) => ({
+                ...ch,
+                lessons: (ch.lessons || []).filter((l: any) => l.is_published !== false)
+              }))
+              .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+
+            setCurrentCourse({ ...courseData, chapters: fetchedChapters });
+            setCourseTitle(courseData.title);
+          }
+        }
+
         const chapterId = paramChapterId || initialChapter?.id;
-        if (!chapterId) return;
+        let activeCh: any = null;
 
-        const { data: chapter, error } = await supabase
-          .from('chapters')
-          .select('*, attachments(*), lessons(*)')
-          .eq('id', chapterId)
-          .single();
+        if (chapterId) {
+          if (fetchedChapters.length > 0) {
+            activeCh = fetchedChapters.find((ch: any) => ch.id === chapterId);
+          }
+          if (!activeCh) {
+            const { data: chapter, error } = await supabase
+              .from('chapters')
+              .select('*, attachments(*), lessons(*)')
+              .eq('id', chapterId)
+              .single();
 
-        if (error) throw error;
-        if (chapter) {
-          const filteredLessons = (chapter.lessons || []).filter((l: any) => l.is_published !== false);
-          setCurrentChapter({ ...chapter, lessons: filteredLessons });
+            if (chapter) {
+              const filteredLessons = (chapter.lessons || []).filter((l: any) => l.is_published !== false);
+              activeCh = { ...chapter, lessons: filteredLessons };
+            }
+          }
+        } else if (fetchedChapters.length > 0) {
+          const completedChapterIds = (courseId && progress[courseId]) || [];
+          const uncompletedChapter = fetchedChapters.find((ch: any) => !completedChapterIds.includes(ch.id));
+          activeCh = uncompletedChapter || fetchedChapters[0];
         }
 
-        const { data: courseData } = await supabase
-          .from('courses')
-          .select('*, chapters(*, lessons(*))')
-          .eq('id', courseId)
-          .single();
+        if (activeCh) {
+          setCurrentChapter(activeCh);
+          setExpandedChapters(prev => ({ ...prev, [activeCh.id]: true }));
 
-        if (courseData) {
-          const filteredChapters = (courseData.chapters || [])
-            .filter((ch: any) => ch.is_published !== false)
-            .map((ch: any) => ({
-              ...ch,
-              lessons: (ch.lessons || []).filter((l: any) => l.is_published !== false)
-            }));
-          setCurrentCourse({ ...courseData, chapters: filteredChapters });
-          setCourseTitle(courseData.title);
+          let selectedLessonId = paramLessonId || null;
+          if (!selectedLessonId && activeCh.lessons && activeCh.lessons.length > 0 && !activeCh.video_url) {
+            const sortedLessons = [...activeCh.lessons].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+            if (sortedLessons.length > 0) {
+              selectedLessonId = sortedLessons[0].id;
+            }
+          }
+          if (selectedLessonId) {
+            setCurrentLessonId(selectedLessonId);
+          }
         }
 
-        if (initialHasAccess === undefined && user) {
+        if (initialHasAccess === undefined && user && courseId) {
           const { data: purchases } = await supabase
             .from('purchases')
             .select('id')
@@ -102,7 +148,7 @@ export default function ChapterPlayerScreen() {
       }
     };
     loadData();
-  }, [initialChapter, paramChapterId, courseId, user?.id, initialHasAccess]);
+  }, [initialChapter, paramChapterId, paramLessonId, courseId, user?.id, initialHasAccess]);
 
   const course = useMemo(() => courses.find(c => c.id === courseId), [courses, courseId]);
   const sortedChapters = useMemo(() => {
@@ -172,13 +218,6 @@ export default function ChapterPlayerScreen() {
     setMarkingComplete(false);
   };
 
-  const getYoutubeId = (url: string) => {
-    if (!url) return null;
-    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts|live)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
-  };
-
   const renderVideoPlayer = () => {
     if (!currentChapter?.video_url) {
       return (
@@ -188,7 +227,7 @@ export default function ChapterPlayerScreen() {
         </div>
       );
     }
-    return null; // Now rendered directly
+    return null;
   };
 
   const bg = isDarkMode ? '#0f172a' : '#f8fafc';
@@ -258,7 +297,8 @@ export default function ChapterPlayerScreen() {
               
               const hasChapterVideo = !ch.lessons || ch.lessons.length === 0 || ch.video_url;
               const hasLessons = ch.lessons && ch.lessons.length > 0;
-              const isExpanded = expandedChapters[ch.id];
+              const isChapterActive = currentChapter?.id === ch.id;
+              const isExpanded = expandedChapters[ch.id] ?? isChapterActive;
 
               return (
                 <div key={ch.id} style={{ borderBottom: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}` }}>
@@ -269,10 +309,10 @@ export default function ChapterPlayerScreen() {
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                         padding: '12px 16px',
-                        background: (currentChapter?.id === ch.id && !currentLessonId)
-                          ? (isDarkMode ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)')
+                        background: isChapterActive
+                          ? (isDarkMode ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.1)')
                           : 'transparent',
-                        borderLeft: (currentChapter?.id === ch.id && !currentLessonId) ? '3px solid #6366f1' : '3px solid transparent',
+                        borderLeft: isChapterActive ? '4px solid #6366f1' : '4px solid transparent',
                         border: 'none', cursor: isLocked ? 'not-allowed' : 'pointer',
                         opacity: isLocked ? 0.5 : 1,
                         textAlign: 'left',
@@ -282,11 +322,12 @@ export default function ChapterPlayerScreen() {
                       <div style={{
                         width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: (currentChapter?.id === ch.id && !currentLessonId) ? '#6366f1' : isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                        background: isChapterActive ? '#6366f1' : isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                        boxShadow: isChapterActive ? '0 0 10px rgba(99, 102, 241, 0.4)' : 'none',
                       }}>
                         {isLocked
                           ? <Lock size={13} color={textMuted} />
-                          : (currentChapter?.id === ch.id && !currentLessonId)
+                          : isChapterActive
                             ? <Play size={12} color="#fff" fill="#fff" />
                             : isDone
                               ? <CheckCircle2 size={14} color="#10b981" />
@@ -296,15 +337,15 @@ export default function ChapterPlayerScreen() {
 
                       <div style={{ flex: 1, overflow: 'hidden' }}>
                         <p style={{
-                          fontSize: 13, fontWeight: (currentChapter?.id === ch.id && !currentLessonId) ? 700 : 500,
-                          color: (currentChapter?.id === ch.id && !currentLessonId) ? '#6366f1' : textPrimary,
+                          fontSize: 13, fontWeight: isChapterActive ? 700 : 500,
+                          color: isChapterActive ? '#6366f1' : textPrimary,
                           margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         }}>
                           {ch.title}
                         </p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                          <Clock size={10} color={textMuted} />
-                          <span style={{ fontSize: 11, color: textMuted }}>
+                          <Clock size={10} color={isChapterActive ? '#6366f1' : textMuted} />
+                          <span style={{ fontSize: 11, color: isChapterActive ? '#6366f1' : textMuted, fontWeight: isChapterActive ? 600 : 400 }}>
                             {ch.duration ? `${Math.floor(ch.duration / 60)}m ${ch.duration % 60}s` : 'Video'}
                           </span>
                           {ch.is_demo && (
@@ -323,7 +364,7 @@ export default function ChapterPlayerScreen() {
                             borderRadius: '50%', background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
                           }}
                         >
-                          {isExpanded ? <ChevronUp size={16} color={textMuted} /> : <ChevronDown size={16} color={textMuted} />}
+                          {isExpanded ? <ChevronUp size={16} color={isChapterActive ? '#6366f1' : textMuted} /> : <ChevronDown size={16} color={isChapterActive ? '#6366f1' : textMuted} />}
                         </div>
                       )}
                     </button>
@@ -335,19 +376,30 @@ export default function ChapterPlayerScreen() {
                       style={{
                         padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
                         cursor: hasLessons ? 'pointer' : 'default',
-                        background: isExpanded ? (isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)') : 'transparent'
+                        background: isChapterActive
+                          ? (isDarkMode ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.1)')
+                          : isExpanded ? (isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)') : 'transparent',
+                        borderLeft: isChapterActive ? '4px solid #6366f1' : '4px solid transparent',
+                        transition: 'all 0.15s',
                       }}
                     >
                       <div style={{
                         width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                        background: isChapterActive ? '#6366f1' : isDone ? 'rgba(16,185,129,0.15)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                        boxShadow: isChapterActive ? '0 0 10px rgba(99, 102, 241, 0.4)' : 'none',
                       }}>
-                        {isDone ? <CheckCircle2 size={14} color="#10b981" /> : <span style={{ fontSize: 11, fontWeight: 700, color: textMuted }}>{idx + 1}</span>}
+                        {isChapterActive
+                          ? <Play size={12} color="#fff" fill="#fff" />
+                          : isDone
+                            ? <CheckCircle2 size={14} color="#10b981" />
+                            : <span style={{ fontSize: 11, fontWeight: 700, color: textMuted }}>{idx + 1}</span>
+                        }
                       </div>
                       <div style={{ flex: 1, overflow: 'hidden' }}>
                         <p style={{
-                          fontSize: 13, fontWeight: 700, color: textPrimary,
+                          fontSize: 13, fontWeight: isChapterActive ? 700 : 500,
+                          color: isChapterActive ? '#6366f1' : textPrimary,
                           margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         }}>
                           {ch.title}
@@ -355,14 +407,14 @@ export default function ChapterPlayerScreen() {
                       </div>
                       {hasLessons && (
                         <div style={{ padding: 4, display: 'flex', alignItems: 'center' }}>
-                          {isExpanded ? <ChevronUp size={16} color={textMuted} /> : <ChevronDown size={16} color={textMuted} />}
+                          {isExpanded ? <ChevronUp size={16} color={isChapterActive ? '#6366f1' : textMuted} /> : <ChevronDown size={16} color={isChapterActive ? '#6366f1' : textMuted} />}
                         </div>
                       )}
                     </div>
                   )}
 
                   {hasLessons && isExpanded && (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', background: isDarkMode ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.02)' }}>
                       {[...ch.lessons]
                         .filter((l: any) => l.is_published !== false)
                         .sort((a:any, b:any) => (a.position||0) - (b.position||0))
@@ -379,9 +431,9 @@ export default function ChapterPlayerScreen() {
                               width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                               padding: '10px 16px 10px 48px',
                               background: isLessonActive
-                                ? (isDarkMode ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)')
+                                ? (isDarkMode ? 'rgba(99,102,241,0.25)' : 'rgba(99,102,241,0.14)')
                                 : 'transparent',
-                              borderLeft: isLessonActive ? '3px solid #6366f1' : '3px solid transparent',
+                              borderLeft: isLessonActive ? '4px solid #6366f1' : '4px solid transparent',
                               border: 'none', cursor: isLessonLocked ? 'not-allowed' : 'pointer',
                               opacity: isLessonLocked ? 0.5 : 1,
                               textAlign: 'left',
@@ -395,12 +447,14 @@ export default function ChapterPlayerScreen() {
                                 margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                                 display: 'flex', alignItems: 'center', gap: 6
                               }}>
-                                {isLessonLocked ? <Lock size={10} color={textMuted} /> : <Play size={10} color={isLessonActive ? '#6366f1' : textMuted} />}
+                                {isLessonLocked
+                                  ? <Lock size={10} color={textMuted} />
+                                  : <Play size={10} color={isLessonActive ? '#6366f1' : textMuted} fill={isLessonActive ? '#6366f1' : 'none'} />}
                                 {lesson.title}
                               </p>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, paddingLeft: 16 }}>
-                                <Clock size={9} color={textMuted} />
-                                <span style={{ fontSize: 10, color: textMuted }}>
+                                <Clock size={9} color={isLessonActive ? '#6366f1' : textMuted} />
+                                <span style={{ fontSize: 10, color: isLessonActive ? '#6366f1' : textMuted, fontWeight: isLessonActive ? 600 : 400 }}>
                                   {lesson.duration ? `${Math.floor(lesson.duration / 60)}m ${lesson.duration % 60}s` : 'Video'}
                                 </span>
                                 {lesson.is_free && (
