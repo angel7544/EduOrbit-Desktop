@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import { uploadToCloudinary } from '../lib/cloudinary';
 import { Header } from '../components/Header';
 import { Avatar } from '../components/Avatar';
+import { APP_VERSION } from '../config/version';
 
 export default function ProfileScreen() {
   const navigate = useNavigate();
@@ -44,19 +45,14 @@ export default function ProfileScreen() {
     if (!user) return;
     setUploading(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const uri = reader.result as string;
-        const publicUrl = await uploadToCloudinary(uri, 'lms_avatars', file.type);
-        const { error } = await supabase
-          .from('users')
-          .update({ profile_image: publicUrl })
-          .eq('id', user.id);
-        if (error) throw error;
-        updateProfile({ profileImage: publicUrl });
-        alert('Profile picture updated!');
-      };
-      reader.readAsDataURL(file);
+      const publicUrl = await uploadToCloudinary(file, 'lms_avatars', file.type);
+      const { error } = await supabase
+        .from('users')
+        .update({ profile_image: publicUrl })
+        .eq('id', user.id);
+      if (error) throw error;
+      updateProfile({ profileImage: publicUrl });
+      alert('Profile picture updated!');
     } catch (error: any) {
       console.error(error);
       alert('Failed to upload image. Please try again.');
@@ -125,7 +121,7 @@ export default function ProfileScreen() {
             <div>
               <span className={`text-[13px] font-bold uppercase tracking-wider mb-4 ml-3 block ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>App Info</span>
               <div className={`rounded-2xl px-4 shadow-sm border ${isDarkMode ? 'bg-gray-800 border-gray-700/60' : 'bg-white border-gray-100'}`}>
-                <Row icon={<Info size={18} color="#94a3b8" />} bg="#94a3b812" text="Version" subtext="7.5.0" hideChevron isDarkMode={isDarkMode} />
+                <Row icon={<Info size={18} color="#94a3b8" />} bg="#94a3b812" text="Version" subtext={APP_VERSION} hideChevron isDarkMode={isDarkMode} />
                 <Row icon={<FileText size={18} color="#10b981" />} bg="#10b98112" text="Terms of Service" onClick={() => navigate('/termsofservice')} isDarkMode={isDarkMode} />
                 <Row icon={<Shield size={18} color="#f59e0b" />} bg="#f59e0b12" text="Privacy Policy" onClick={() => navigate('/privacypolicy')} isDarkMode={isDarkMode} />
                 <Row icon={<Info size={18} color="#3b82f6" />} bg="#3b82f612" text="About Us" onClick={() => navigate('/aboutus')} isDarkMode={isDarkMode} isLast={true} />

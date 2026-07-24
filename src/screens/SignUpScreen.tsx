@@ -4,8 +4,7 @@ import { Mail, Lock, Eye, EyeOff, User, Phone, Atom, BookOpen, GraduationCap } f
 import { useAuthStore, UserRole } from '../store/authStore';
 import { useTheme } from '../hooks/useTheme';
 import { CustomToast } from '../components/CustomToast';
-
-const APP_VERSION = '6.5.1';
+import { APP_VERSION } from '../config/version';
 
 export default function SignUpScreen() {
   const { isDarkMode } = useTheme();

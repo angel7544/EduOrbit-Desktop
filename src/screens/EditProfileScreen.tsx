@@ -48,14 +48,9 @@ export default function EditProfileScreen() {
     if (!user) return;
     setUploadingImage(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const uri = reader.result as string;
-        const publicUrl = await uploadToCloudinary(uri, 'lms_avatars', file.type);
-        setProfileImage(publicUrl);
-        updateProfile({ profileImage: publicUrl });
-      };
-      reader.readAsDataURL(file);
+      const publicUrl = await uploadToCloudinary(file, 'lms_avatars', file.type);
+      setProfileImage(publicUrl);
+      updateProfile({ profileImage: publicUrl });
     } catch (error: any) {
       console.error(error);
       alert('Failed to upload image');

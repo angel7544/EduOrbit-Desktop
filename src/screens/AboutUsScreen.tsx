@@ -1,6 +1,7 @@
 import React from 'react';
 import { Header } from '../components/Header';
 import { useTheme } from '../hooks/useTheme';
+import { APP_VERSION } from '../config/version';
 
 export default function AboutUsScreen() {
   const { isDarkMode } = useTheme();
@@ -28,7 +29,7 @@ export default function AboutUsScreen() {
           {'\n\n'}
           Welcome to EduOrbit — where knowledge turns into opportunity.
         </p>
-        <p className="mt-10 text-center text-sm text-textLight m-0">v7.5.0</p>
+        <p className="mt-10 text-center text-sm text-textLight m-0">v{APP_VERSION}</p>
         
         <div className="mt-10 flex flex-col items-center gap-2">
           <span className="text-sm text-textLight">Developed by</span>
