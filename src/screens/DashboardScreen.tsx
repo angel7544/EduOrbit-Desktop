@@ -767,7 +767,7 @@ export default function DashboardScreen() {
                       </div>
 
                       <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
-                        {courseObj.thumbnail_url && (
+                        {courseObj?.thumbnail_url && (
                           <img
                             src={courseObj.thumbnail_url}
                             alt=""
@@ -776,10 +776,10 @@ export default function DashboardScreen() {
                         )}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <h4 style={{ fontSize: 14, fontWeight: 800, color: textPrimary, margin: '0 0 4px', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {ch.title}
+                            {ch?.title || 'Live Session'}
                           </h4>
                           <p style={{ fontSize: 12, color: textMuted, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            Course: {courseObj.title}
+                            Course: {courseObj?.title || 'Live Class Course'}
                           </p>
                         </div>
                       </div>

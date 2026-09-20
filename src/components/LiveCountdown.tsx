@@ -22,7 +22,10 @@ export const LiveCountdown: React.FC<LiveCountdownProps> = ({
     total: number;
   }>({ days: 0, hours: 0, minutes: 0, seconds: 0, total: 0 });
 
+  const hasFiredRef = React.useRef(false);
+
   useEffect(() => {
+    hasFiredRef.current = false;
     if (!targetDate) return;
 
     const calculate = () => {
@@ -45,8 +48,8 @@ export const LiveCountdown: React.FC<LiveCountdownProps> = ({
     const initial = calculate();
     setTimeLeft(initial);
 
+    // If already zero or negative on initial mount, do NOT trigger loop callback!
     if (initial.total <= 0) {
-      onTimeReached?.();
       return;
     }
 
@@ -55,12 +58,15 @@ export const LiveCountdown: React.FC<LiveCountdownProps> = ({
       setTimeLeft(remaining);
       if (remaining.total <= 0) {
         clearInterval(interval);
-        onTimeReached?.();
+        if (!hasFiredRef.current) {
+          hasFiredRef.current = true;
+          onTimeReached?.();
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [targetDate, onTimeReached]);
+  }, [targetDate]);
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const isStartingSoon = timeLeft.total > 0 && timeLeft.total <= 600;

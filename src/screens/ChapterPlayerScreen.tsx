@@ -2,7 +2,8 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Lock,
-  Play, Share2, BookOpen, Clock, CheckCheck, FileText
+  Play, Share2, BookOpen, Clock, CheckCheck, FileText, PanelLeftClose, PanelLeftOpen,
+  Info, Layers, Download
 } from 'lucide-react';
 import { ChapterItem, useCourseStore } from '../store/courseStore';
 import { useAuthStore } from '../store/authStore';
@@ -31,6 +32,9 @@ export default function ChapterPlayerScreen() {
   const [loading, setLoading] = useState(true);
   const [markingComplete, setMarkingComplete] = useState(false);
   const [forceEnterLive, setForceEnterLive] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [infoTab, setInfoTab] = useState<'lesson' | 'course' | 'resources'>('lesson');
+  const [infoCollapsed, setInfoCollapsed] = useState(true);
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>(() => {
     return initialChapter ? { [initialChapter.id]: true } : {};
   });
@@ -352,13 +356,29 @@ export default function ChapterPlayerScreen() {
   const completedCount = progress[courseId]?.length || 0;
   const overallProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
+  const currentDescription = useMemo(() => {
+    return (currentLessonId 
+      ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description 
+      : currentChapter?.description) || currentChapter?.description || '';
+  }, [currentLessonId, playableItems, currentChapter]);
+
+  const hasAttachments = useMemo(() => {
+    return !!(currentChapter?.attachments && currentChapter.attachments.length > 0);
+  }, [currentChapter]);
+
+  const hasDetails = useMemo(() => {
+    return !!(currentDescription.trim() || currentCourse?.description?.trim() || hasAttachments);
+  }, [currentDescription, currentCourse?.description, hasAttachments]);
+
   const navigateToItem = (item: any) => {
-    const ch = item.chapter;
-    const isFree = item.type === 'lesson' ? item.lesson.is_free : ch.is_demo;
+    const ch = item.chapter || item.parentChapter;
+    if (!ch) return;
+    const isFree = item.type === 'lesson' ? item.lesson?.is_free : ch.is_demo;
     if (!isFree && !hasAccess) {
       alert('This content is locked. Please purchase the course to access it.');
       return;
     }
+    setForceEnterLive(false);
     setCurrentChapter(ch);
     setCurrentLessonId(item.type === 'lesson' ? item.lesson.id : null);
     setExpandedChapters(prev => ({ ...prev, [ch.id]: true }));
@@ -427,10 +447,16 @@ export default function ChapterPlayerScreen() {
 
         {/* Left: Playlist Sidebar */}
         <div style={{
-          width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column',
+          width: sidebarCollapsed ? 0 : 380,
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
           background: isDarkMode ? '#1e293b' : '#f8fafc',
           overflowY: 'auto',
-          borderRight: `1px solid ${border}`
+          overflowX: 'hidden',
+          borderRight: sidebarCollapsed ? 'none' : `1px solid ${border}`,
+          transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+          position: 'relative'
         }}>
           {/* Playlist header */}
           <div style={{
@@ -438,8 +464,22 @@ export default function ChapterPlayerScreen() {
             background: isDarkMode ? '#0f172a' : '#fff', position: 'sticky', top: 0, zIndex: 10,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 800, color: textPrimary }}>Course Playlist</span>
-              <span style={{ fontSize: 12, color: textMuted }}>{totalCount} lessons</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: textPrimary, whiteSpace: 'nowrap' }}>Course Playlist</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: textMuted, whiteSpace: 'nowrap' }}>{totalCount} lessons</span>
+                <button
+                  onClick={() => setSidebarCollapsed(true)}
+                  style={{
+                    padding: '4px 6px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                    background: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                    color: textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'background 0.15s'
+                  }}
+                  title="Collapse playlist (Theater Mode)"
+                >
+                  <PanelLeftClose size={16} />
+                </button>
+              </div>
             </div>
             {/* mini progress */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -621,35 +661,48 @@ export default function ChapterPlayerScreen() {
                               <Clock size={9} /> UPCOMING
                             </span>
                           )}
+                          {isRecorded && !isLive && !isUpcoming && (
+                            <span style={{
+                              fontSize: 8, fontWeight: 800, color: '#6366f1', background: 'rgba(99,102,241,0.15)',
+                              padding: '1px 5px', borderRadius: 4, letterSpacing: 0.5, flexShrink: 0
+                            }}>RECORDED</span>
+                          )}
+                        </p>
+                        <p style={{ fontSize: 11, color: textMuted, margin: '2px 0 0' }}>
+                          {isUpcoming && ch.live_starts_at
+                            ? `Starts ${formatLiveTime(ch.live_starts_at)}`
+                            : `${(ch.lessons || []).length} lessons`}
                         </p>
                       </div>
-                      {hasLessons && (
-                        <div style={{ padding: 4, display: 'flex', alignItems: 'center' }}>
-                          {isExpanded ? <ChevronUp size={16} color={isChapterActive ? '#6366f1' : textMuted} /> : <ChevronDown size={16} color={isChapterActive ? '#6366f1' : textMuted} />}
-                        </div>
-                      )}
+                      <div
+                        onClick={(e) => toggleChapter(ch.id, e)}
+                        style={{
+                          padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          borderRadius: '50%', background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                        }}
+                      >
+                        {isExpanded ? <ChevronUp size={16} color={isChapterActive ? '#6366f1' : textMuted} /> : <ChevronDown size={16} color={isChapterActive ? '#6366f1' : textMuted} />}
+                      </div>
                     </div>
                   )}
 
-                  {hasLessons && isExpanded && (
-                    <div style={{ display: 'flex', flexDirection: 'column', background: isDarkMode ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.02)' }}>
-                      {[...ch.lessons]
-                        .filter((l: any) => l.is_published !== false)
-                        .sort((a:any, b:any) => (a.position||0) - (b.position||0))
-                        .map((lesson: any) => {
-                          const isLessonActive = currentLessonId === lesson.id;
-                          const isLessonLocked = !lesson.is_free && !hasAccess;
+                  {/* Lessons */}
+                  {isExpanded && ch.lessons && ch.lessons.length > 0 && (
+                    <div style={{ background: isDarkMode ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)' }}>
+                      {ch.lessons.map((lesson: any) => {
+                        const isLessonActive = currentLessonId === lesson.id;
+                        const isLessonLocked = !lesson.is_free && !hasAccess;
 
-                          return (
+                        return (
                           <button
                             key={lesson.id}
-                            onClick={() => navigateToItem({ type: 'lesson', chapter: ch, lesson })}
+                            onClick={() => navigateToItem({ type: 'lesson', lesson, parentChapter: ch })}
                             disabled={isLessonLocked}
                             style={{
-                              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                               padding: '10px 16px 10px 48px',
                               background: isLessonActive
-                                ? (isDarkMode ? 'rgba(99,102,241,0.25)' : 'rgba(99,102,241,0.14)')
+                                ? (isDarkMode ? 'rgba(99,102,241,0.25)' : 'rgba(99,102,241,0.15)')
                                 : 'transparent',
                               borderLeft: isLessonActive ? '4px solid #6366f1' : '4px solid transparent',
                               border: 'none', cursor: isLessonLocked ? 'not-allowed' : 'pointer',
@@ -658,21 +711,29 @@ export default function ChapterPlayerScreen() {
                               transition: 'all 0.15s',
                             }}
                           >
+                            <div style={{
+                              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: isLessonActive ? '#6366f1' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                            }}>
+                              {isLessonLocked
+                                ? <Lock size={10} color={textMuted} />
+                                : isLessonActive
+                                  ? <Play size={8} color="#fff" fill="#fff" />
+                                  : <Play size={8} color={textMuted} fill={textMuted} />
+                              }
+                            </div>
                             <div style={{ flex: 1, overflow: 'hidden' }}>
                               <p style={{
                                 fontSize: 12, fontWeight: isLessonActive ? 700 : 500,
                                 color: isLessonActive ? '#6366f1' : textPrimary,
                                 margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                display: 'flex', alignItems: 'center', gap: 6
                               }}>
-                                {isLessonLocked
-                                  ? <Lock size={10} color={textMuted} />
-                                  : <Play size={10} color={isLessonActive ? '#6366f1' : textMuted} fill={isLessonActive ? '#6366f1' : 'none'} />}
                                 {lesson.title}
                               </p>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, paddingLeft: 16 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                                 <Clock size={9} color={isLessonActive ? '#6366f1' : textMuted} />
-                                <span style={{ fontSize: 10, color: isLessonActive ? '#6366f1' : textMuted, fontWeight: isLessonActive ? 600 : 400 }}>
+                                <span style={{ fontSize: 10, color: isLessonActive ? '#6366f1' : textMuted }}>
                                   {lesson.duration ? `${Math.floor(lesson.duration / 60)}m ${lesson.duration % 60}s` : 'Video'}
                                 </span>
                                 {lesson.is_free && (
@@ -695,7 +756,32 @@ export default function ChapterPlayerScreen() {
         </div>
 
         {/* Right: Video + Info */}
-        <div style={{ flex: '2.5', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', position: 'relative' }}>
+
+          {/* Floating Expand Sidebar Button when collapsed */}
+          {sidebarCollapsed && (
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              style={{
+                position: 'absolute', top: 12, left: 12, zIndex: 40,
+                background: isDarkMode ? 'rgba(15,23,42,0.92)' : 'rgba(255,255,255,0.95)',
+                backdropFilter: 'blur(10px)',
+                color: textPrimary,
+                border: `1.5px solid ${isDarkMode ? 'rgba(99,102,241,0.4)' : border}`,
+                boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+                borderRadius: 10, padding: '7px 13px',
+                display: 'flex', alignItems: 'center', gap: 6,
+                cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
+              title="Expand playlist"
+            >
+              <PanelLeftOpen size={16} color="#6366f1" />
+              <span>Playlist</span>
+            </button>
+          )}
 
           {/* Video Player or Scheduled Live Waiting Screen */}
           {(() => {
@@ -761,8 +847,24 @@ export default function ChapterPlayerScreen() {
             }
 
             return (
-              <div style={{ position: 'relative', background: '#000', flexShrink: 0, maxHeight: '65vh' }}>
+              <div style={{
+                position: 'relative',
+                background: '#000',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                height: sidebarCollapsed
+                  ? (infoCollapsed || !hasDetails ? 'calc(100vh - 64px - 62px)' : 'calc(100vh - 64px - 140px)')
+                  : (infoCollapsed || !hasDetails ? 'calc(100vh - 64px - 62px)' : 'calc(100vh - 64px - 180px)'),
+                minHeight: 280,
+                maxHeight: sidebarCollapsed && (infoCollapsed || !hasDetails) ? 'calc(100vh - 64px - 62px)' : '75vh',
+                transition: 'height 0.2s ease',
+                overflow: 'hidden'
+              }}>
                 <VideoPlayer
+                  key={`${currentChapter?.id || 'ch'}_${currentLessonId || 'main'}_${activeVideoUrl}`}
                   url={activeVideoUrl}
                   title={currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title : currentChapter?.title}
                   videoKey={`${user?.id || 'guest'}_${courseId}_${currentChapter?.id || ''}${currentLessonId ? `_${currentLessonId}` : ''}`}
@@ -784,220 +886,310 @@ export default function ChapterPlayerScreen() {
             );
           })()}
 
-          {/* ── Active Live Alert Banner (if another chapter in this course is currently LIVE) ── */}
-          {(() => {
-            const otherLiveChapter = sortedChapters.find((ch: any) => ch.id !== currentChapter?.id && isChapterLive(ch));
-            const otherUpcomingChapter = sortedChapters.find((ch: any) => ch.id !== currentChapter?.id && isChapterUpcoming(ch));
-
-            if (otherLiveChapter) {
-              return (
-                <div style={{
-                  margin: '16px 28px 0', padding: '14px 20px', borderRadius: 16,
-                  background: isDarkMode ? 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(30,41,59,0.9))' : '#fef2f2',
-                  border: '1.5px solid rgba(239,68,68,0.4)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14,
-                  boxShadow: '0 4px 18px rgba(239,68,68,0.15)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                    <LiveViewerBadge size="sm" isDarkMode={isDarkMode} />
-                    <div style={{ minWidth: 0 }}>
-                      <span style={{ fontSize: 10, fontWeight: 900, color: '#ef4444', letterSpacing: '0.6px', display: 'block' }}>
-                        STREAMING LIVE NOW IN THIS COURSE
-                      </span>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {otherLiveChapter.title}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => navigateToItem({ type: 'chapter', chapter: otherLiveChapter })}
-                    style={{
-                      padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                      background: '#ef4444', color: '#fff', fontSize: 12, fontWeight: 800,
-                      display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
-                      boxShadow: '0 4px 14px rgba(239,68,68,0.4)'
-                    }}
-                  >
-                    <Play size={12} fill="#fff" /> Join Live
-                  </button>
-                </div>
-              );
-            }
-
-            if (otherUpcomingChapter) {
-              return (
-                <div style={{
-                  margin: '16px 28px 0', padding: '12px 18px', borderRadius: 14,
-                  background: isDarkMode ? 'rgba(245,158,11,0.12)' : '#fffbeb',
-                  border: '1px solid rgba(245,158,11,0.3)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(245,158,11,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Clock size={15} color="#f59e0b" />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: '#d97706', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
-                          Upcoming Live Class
-                        </span>
-                        <LiveCountdown targetDate={otherUpcomingChapter.live_starts_at} variant="mini" isDarkMode={isDarkMode} onTimeReached={refreshCourseChapters} />
-                      </div>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: textPrimary, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {otherUpcomingChapter.title}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => navigateToItem({ type: 'chapter', chapter: otherUpcomingChapter })}
-                    style={{
-                      padding: '6px 14px', borderRadius: 9, border: '1px solid rgba(245,158,11,0.4)', cursor: 'pointer',
-                      background: 'transparent', color: '#d97706', fontSize: 11, fontWeight: 800,
-                      display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0
-                    }}
-                  >
-                    View Session
-                  </button>
-                </div>
-              );
-            }
-
-            return null;
-          })()}
-
           {/* Chapter info panel */}
-          <div style={{ padding: '24px 32px', background: cardBg, borderBottom: `1px solid ${border}` }}>
-
-            {/* Chapter title + badge */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          {infoCollapsed ? (
+            <div style={{
+              minHeight: 62,
+              height: 62,
+              padding: '0 24px',
+              background: cardBg,
+              borderBottom: `1px solid ${border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexShrink: 0,
+              boxSizing: 'border-box'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8,
+                  color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 6, flexShrink: 0
+                }}>
+                  {currentLessonId ? 'LESSON' : 'CHAPTER'}
+                </span>
+                {isChapterLive(currentChapter) && (
+                  <LiveViewerBadge isDarkMode={isDarkMode} size="sm" />
+                )}
+                {isChapterUpcoming(currentChapter) && (
+                  <LiveCountdown
+                    targetDate={currentChapter?.live_starts_at}
+                    variant="badge"
+                    isDarkMode={isDarkMode}
+                    onTimeReached={refreshCourseChapters}
+                  />
+                )}
+                {isCompleted && (
                   <span style={{
-                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1,
-                    color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 6,
+                    fontSize: 10, fontWeight: 700,
+                    color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: 6,
+                    display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0
                   }}>
-                    {currentLessonId ? 'LESSON' : 'CHAPTER'}
+                    <CheckCircle2 size={10} /> Completed
                   </span>
-                  {isChapterLive(currentChapter) && (
-                    <LiveViewerBadge isDarkMode={isDarkMode} size="md" />
-                  )}
-                  {isChapterUpcoming(currentChapter) && (
-                    <LiveCountdown
-                      targetDate={currentChapter?.live_starts_at}
-                      variant="badge"
-                      isDarkMode={isDarkMode}
-                      onTimeReached={refreshCourseChapters}
-                    />
-                  )}
-                  {isChapterRecorded(currentChapter) && !isChapterLive(currentChapter) && !isChapterUpcoming(currentChapter) && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5,
-                      color: '#6366f1', background: 'rgba(99,102,241,0.12)', padding: '2px 8px', borderRadius: 6
-                    }}>
-                      RECORDED SESSION
-                    </span>
-                  )}
-                  {isCompleted && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
-                      color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: 6,
-                      display: 'flex', alignItems: 'center', gap: 3,
-                    }}>
-                      <CheckCircle2 size={10} /> Chapter Completed
-                    </span>
-                  )}
-                </div>
-                <h2 style={{ fontSize: 22, fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.3 }}>
+                )}
+                <h2 style={{
+                  fontSize: 15, fontWeight: 700, color: textPrimary, margin: 0,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }}>
                   {currentLessonId 
                     ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title || 'Lesson'
                     : currentChapter?.title}
                 </h2>
-                {currentLessonId && (
-                  <div style={{ marginTop: 8, fontSize: 13, color: textMuted }}>
-                    From chapter: <strong style={{ color: textPrimary }}>{currentChapter?.title}</strong>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: textMuted, fontWeight: 600 }}>
+                  {completedCount}/{totalCount} ({overallProgress}%)
+                </span>
+                {hasDetails && (
+                  <button
+                    onClick={() => setInfoCollapsed(false)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 8,
+                      border: `1px solid ${border}`,
+                      background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                      color: textPrimary, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
+                      transition: 'all 0.15s'
+                    }}
+                    title="Show Details & Resources"
+                  >
+                    <span>Show Details</span>
+                    <ChevronDown size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: '20px 28px', background: cardBg, borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
+              {/* Chapter title + badge + section collapse toggle */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1,
+                      color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 6,
+                    }}>
+                      {currentLessonId ? 'LESSON' : 'CHAPTER'}
+                    </span>
+                    {isChapterLive(currentChapter) && (
+                      <LiveViewerBadge isDarkMode={isDarkMode} size="md" />
+                    )}
+                    {isChapterUpcoming(currentChapter) && (
+                      <LiveCountdown
+                        targetDate={currentChapter?.live_starts_at}
+                        variant="badge"
+                        isDarkMode={isDarkMode}
+                        onTimeReached={refreshCourseChapters}
+                      />
+                    )}
+                    {isChapterRecorded(currentChapter) && !isChapterLive(currentChapter) && !isChapterUpcoming(currentChapter) && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5,
+                        color: '#6366f1', background: 'rgba(99,102,241,0.12)', padding: '2px 8px', borderRadius: 6
+                      }}>
+                        RECORDED SESSION
+                      </span>
+                    )}
+                    {isCompleted && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+                        color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: 6,
+                        display: 'flex', alignItems: 'center', gap: 3,
+                      }}>
+                        <CheckCircle2 size={10} /> Chapter Completed
+                      </span>
+                    )}
+                  </div>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.3 }}>
+                    {currentLessonId 
+                      ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title || 'Lesson'
+                      : currentChapter?.title}
+                  </h2>
+                  {currentLessonId && (
+                    <div style={{ marginTop: 6, fontSize: 13, color: textMuted }}>
+                      From chapter: <strong style={{ color: textPrimary }}>{currentChapter?.title}</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* Toggle Collapse Details */}
+                <button
+                  onClick={() => setInfoCollapsed(true)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8,
+                    border: `1px solid ${border}`,
+                    background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                    color: textMuted, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
+                    flexShrink: 0
+                  }}
+                  title="Hide Details"
+                >
+                  <span>Hide Details</span>
+                  <ChevronUp size={14} />
+                </button>
+              </div>
+
+              {/* Progress bar */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: textMuted }}>{completedCount}/{totalCount} lessons completed</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
+                </div>
+                <div style={{ height: 5, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99 }}>
+                  <div style={{
+                    height: '100%', width: `${overallProgress}%`,
+                    background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                    borderRadius: 99, transition: 'width 0.4s ease',
+                  }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Collapsible Tabbed Details Section: About Lesson | About Course | Resources */}
+          {!infoCollapsed && (
+            <div style={{ background: bg, flex: 1 }}>
+              {/* Tab Navigation */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '12px 32px',
+                borderBottom: `1px solid ${border}`,
+                background: isDarkMode ? 'rgba(15,23,42,0.4)' : 'rgba(255,255,255,0.4)',
+                overflowX: 'auto'
+              }}>
+                <button
+                  onClick={() => setInfoTab('lesson')}
+                  style={{
+                    padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
+                    background: infoTab === 'lesson' ? '#6366f1' : 'transparent',
+                    color: infoTab === 'lesson' ? '#ffffff' : textMuted,
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <BookOpen size={14} />
+                  <span>About Lesson</span>
+                </button>
+
+                <button
+                  onClick={() => setInfoTab('course')}
+                  style={{
+                    padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
+                    background: infoTab === 'course' ? '#6366f1' : 'transparent',
+                    color: infoTab === 'course' ? '#ffffff' : textMuted,
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <Layers size={14} />
+                  <span>About Course</span>
+                </button>
+
+                {currentChapter?.attachments && currentChapter.attachments.length > 0 && (
+                  <button
+                    onClick={() => setInfoTab('resources')}
+                    style={{
+                      padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                      fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
+                      background: infoTab === 'resources' ? '#6366f1' : 'transparent',
+                      color: infoTab === 'resources' ? '#ffffff' : textMuted,
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <FileText size={14} />
+                    <span>Resources ({currentChapter.attachments.length})</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Tab Content */}
+              <div style={{ padding: '24px 32px' }}>
+                {infoTab === 'lesson' && (
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>
+                      {currentLessonId ? 'Lesson Overview' : 'Chapter Overview'}
+                    </h3>
+                    <div style={{ fontSize: 14, color: textMuted, lineHeight: 1.8, margin: 0, background: cardBg, padding: '20px', borderRadius: '14px', border: `1px solid ${border}` }}>
+                      <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                        {(currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description || currentChapter?.description : currentChapter?.description) || 'No specific description provided for this lesson.'}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+
+                {infoTab === 'course' && (
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>
+                      {courseTitle || 'Course Overview'}
+                    </h3>
+                    <div style={{ fontSize: 14, color: textMuted, lineHeight: 1.8, margin: 0, background: cardBg, padding: '20px', borderRadius: '14px', border: `1px solid ${border}` }}>
+                      <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                        {currentCourse?.description || 'Comprehensive course content and learning materials provided by the instructor.'}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+
+                {infoTab === 'resources' && currentChapter?.attachments && (
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 14px' }}>
+                      Lesson Resources & Downloads
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {currentChapter.attachments.map((att: any) => {
+                        const isAssignment = att.title?.toLowerCase().includes('assignment') || att.name?.toLowerCase().includes('assignment');
+                        return (
+                          <div
+                            key={att.id}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '14px 18px', borderRadius: 14, border: `1px solid ${border}`,
+                              background: cardBg
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <FileText size={18} color="#6366f1" />
+                              </div>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: textPrimary }}>{att.title}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                onClick={() => navigate('/attachmentviewer', { state: { url: att.file_url, title: att.title, type: att.file_type } })}
+                                style={{
+                                  padding: '7px 16px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                                  background: '#6366f1', color: '#fff', fontSize: 12, fontWeight: 700
+                                }}
+                              >
+                                View
+                              </button>
+                              {isAssignment && (
+                                <button
+                                  onClick={() => window.open(att.file_url, '_blank')}
+                                  style={{
+                                    padding: '7px 16px', borderRadius: 9, border: `1px solid #6366f1`, cursor: 'pointer',
+                                    background: 'transparent', color: '#6366f1', fontSize: 12, fontWeight: 700,
+                                    display: 'flex', alignItems: 'center', gap: 4
+                                  }}
+                                >
+                                  <Download size={13} />
+                                  Download
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Progress bar */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: textMuted }}>{completedCount}/{totalCount} lessons completed</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
-              </div>
-              <div style={{ height: 6, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99 }}>
-                <div style={{
-                  height: '100%', width: `${overallProgress}%`,
-                  background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
-                  borderRadius: 99, transition: 'width 0.4s ease',
-                }} />
-              </div>
-            </div>
-
-          </div>
-
-          {/* Description */}
-          {(currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description || currentChapter?.description : currentChapter?.description) && (
-            <div style={{ padding: '28px 32px', background: bg }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>About this lesson</h3>
-              <div style={{ fontSize: 15, color: textMuted, lineHeight: 1.8, margin: 0, background: isDarkMode ? '#1e293b' : '#f1f5f9', padding: '16px', borderRadius: '8px' }}>
-                <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                  {currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description || currentChapter?.description : currentChapter?.description}
-                </ReactMarkdown>
-              </div>
-            </div>
           )}
 
-          {/* Lesson Resources / Attachments */}
-          {currentChapter?.attachments && currentChapter.attachments.length > 0 && (
-            <div style={{ padding: '24px 28px', background: bg, borderTop: `1px solid ${border}` }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>Lesson Resources</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {currentChapter.attachments.map((att: any) => {
-                  const isAssignment = att.title?.toLowerCase().includes('assignment') || att.name?.toLowerCase().includes('assignment');
-                  
-                  return (
-                    <div
-                      key={att.id}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: 12, borderRadius: 12, border: `1px solid ${border}`,
-                        background: cardBg
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <FileText size={18} color="#6366f1" />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>{att.title}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          onClick={() => navigate('/attachmentviewer', { state: { url: att.file_url, title: att.title, type: att.file_type } })}
-                          style={{
-                            padding: '6px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                            background: '#6366f1', color: '#fff', fontSize: 12, fontWeight: 600
-                          }}
-                        >
-                          View
-                        </button>
-                        {isAssignment && (
-                          <button
-                            onClick={() => window.open(att.file_url, '_blank')}
-                            style={{
-                              padding: '6px 12px', borderRadius: 8, border: `1px solid #6366f1`, cursor: 'pointer',
-                              background: 'transparent', color: '#6366f1', fontSize: 12, fontWeight: 600
-                            }}
-                          >
-                            Download
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

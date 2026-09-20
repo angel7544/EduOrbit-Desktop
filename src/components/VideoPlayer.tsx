@@ -3,7 +3,7 @@ import Hls from 'hls.js';
 import {
   Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX,
   Maximize, Minimize, Settings, SkipBack, SkipForward,
-  CheckCircle2, Radio, AlertCircle, Loader2
+  CheckCircle2, Radio, AlertCircle, Loader2, PictureInPicture2
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -105,6 +105,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPip, setIsPip] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
@@ -139,6 +140,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (watermarkIntervalRef.current) clearInterval(watermarkIntervalRef.current);
     };
   }, [user?.id]);
+
+  // Picture in Picture change listeners
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const handleEnterPip = () => setIsPip(true);
+    const handleLeavePip = () => setIsPip(false);
+    video.addEventListener('enterpictureinpicture', handleEnterPip);
+    video.addEventListener('leavepictureinpicture', handleLeavePip);
+    return () => {
+      video.removeEventListener('enterpictureinpicture', handleEnterPip);
+      video.removeEventListener('leavepictureinpicture', handleLeavePip);
+    };
+  }, []);
+
+  const togglePip = useCallback(async () => {
+    if (!videoRef.current) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (document.pictureInPictureEnabled && videoRef.current.requestPictureInPicture) {
+        await videoRef.current.requestPictureInPicture();
+      }
+    } catch (err) {
+      console.warn('PiP error:', err);
+    }
+  }, []);
 
   // Fullscreen change listener
   useEffect(() => {
@@ -725,7 +753,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         if (isPlaying && !showSettingsMenu) setControlsVisible(false);
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className={`relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl select-none group flex items-center justify-center ${
+      className={`relative w-full max-w-full max-h-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl select-none group flex items-center justify-center ${
         isFullscreen ? 'rounded-none h-screen aspect-auto' : ''
       }`}
     >
@@ -1127,8 +1155,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           </div>
 
-          {/* Right Controls: Settings & Fullscreen */}
+          {/* Right Controls: Picture in Picture, Settings & Fullscreen */}
           <div className="flex items-center gap-2">
+            {/* Picture in Picture Button */}
+            {!youtubeId && typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && (
+              <button
+                onClick={togglePip}
+                className={`p-2 rounded-lg transition-colors cursor-pointer border-none ${
+                  isPip ? 'bg-primary text-white shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10 bg-transparent'
+                }`}
+                title={isPip ? 'Exit Picture-in-Picture' : 'Picture-in-Picture'}
+              >
+                <PictureInPicture2 size={18} />
+              </button>
+            )}
+
             {/* Settings Toggle */}
             <button
               onClick={() => {
