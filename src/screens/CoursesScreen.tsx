@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { Search, Star, Heart, Lock, Users, Clock, X, ChevronDown, Book } from 'lucide-react';
+import { Search, Star, Heart, Lock, Users, Clock, X, ChevronDown, Book, Play } from 'lucide-react';
 import { currencyFormater, formatDuration, stripMarkdown } from '../lib/utils';
 import { useCourseStore } from '../store/courseStore';
 import { useAuthStore } from '../store/authStore';
@@ -331,6 +331,19 @@ export default function CoursesScreen() {
             )}
             {filteredCourses.map((item) => {
               const subject = item.raw.video_subject || 'Development';
+              const allChapters = item.raw?.chapters || [];
+              const ongoingLiveChapter = allChapters.find((ch: any) =>
+                ch.is_published !== false && (
+                  ch.live_status === 'LIVE' ||
+                  (ch.is_live && (!ch.live_ends_at || new Date(ch.live_ends_at) > new Date()) && (!ch.live_starts_at || new Date(ch.live_starts_at) <= new Date()))
+                )
+              );
+              const upcomingLiveChapter = !ongoingLiveChapter ? allChapters.find((ch: any) =>
+                ch.is_published !== false && (
+                  ch.live_status === 'SCHEDULED' ||
+                  (ch.is_live && ch.live_starts_at && new Date(ch.live_starts_at) > new Date())
+                )
+              ) : null;
               
               return (
                 <div
@@ -359,13 +372,23 @@ export default function CoursesScreen() {
                       className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110" 
                     />
                     
-                    {/* Glassmorphic Expiry Badges */}
-                    {item.expiryInfo && (
+                    {/* Glassmorphic Expiry / Live Badges */}
+                    {ongoingLiveChapter ? (
+                      <div className="absolute top-3.5 left-3.5 flex flex-row items-center px-3 py-1 rounded-full gap-1.5 z-10 bg-red-600 text-white shadow-lg animate-pulse border border-white/20">
+                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                        <span className="text-white text-[10px] font-black uppercase tracking-wider">LIVE NOW</span>
+                      </div>
+                    ) : item.expiryInfo ? (
                       <div className={`absolute top-3.5 left-3.5 flex flex-row items-center px-3 py-1 rounded-full gap-1.5 z-10 backdrop-blur-md border border-white/10 ${item.isExpired ? 'bg-red-500/90 text-white' : (item.expiryInfo === 'Lifetime Access' ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white')}`}>
                         <Clock size={12} className="text-white animate-pulse" />
                         <span className="text-white text-[10px] font-extrabold uppercase tracking-wide">{item.expiryInfo}</span>
                       </div>
-                    )}
+                    ) : upcomingLiveChapter ? (
+                      <div className="absolute top-3.5 left-3.5 flex flex-row items-center px-3 py-1 rounded-full gap-1.5 z-10 bg-amber-500/90 text-white shadow backdrop-blur-md border border-white/10">
+                        <Clock size={12} className="text-white" />
+                        <span className="text-white text-[10px] font-extrabold uppercase tracking-wide">Live Scheduled</span>
+                      </div>
+                    ) : null}
 
                     {item.isExpired && (
                       <div className="absolute inset-0 bg-black/70 flex flex-col justify-center items-center z-20 backdrop-blur-xs">
@@ -453,13 +476,34 @@ export default function CoursesScreen() {
 
                       <div className="flex flex-row items-center justify-between mt-1 gap-2">
                         {item.isEnrolled ? (
-                          <div 
-                            className={`flex-1 rounded-2xl py-3 flex items-center justify-center cursor-pointer transition-all duration-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${item.isExpired ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-500/10' : 'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-green-500/10'}`}
-                          >
-                            <span className="text-white text-xs font-extrabold uppercase tracking-wider">
-                              {item.isExpired ? 'Renew Access' : 'Continue Learning'}
-                            </span>
-                          </div>
+                          ongoingLiveChapter && !item.isExpired ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate('/chapter-player', {
+                                  state: {
+                                    courseId: item.id,
+                                    chapterId: ongoingLiveChapter.id,
+                                    chapter: ongoingLiveChapter,
+                                    courseTitle: item.title,
+                                    hasAccess: true
+                                  }
+                                });
+                              }}
+                              className="flex-1 rounded-2xl py-3 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/20 border-none font-extrabold text-xs uppercase tracking-wider"
+                            >
+                              <Play size={13} fill="#fff" />
+                              <span>Join Live Session</span>
+                            </button>
+                          ) : (
+                            <div 
+                              className={`flex-1 rounded-2xl py-3 flex items-center justify-center cursor-pointer transition-all duration-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${item.isExpired ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-500/10' : 'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-green-500/10'}`}
+                            >
+                              <span className="text-white text-xs font-extrabold uppercase tracking-wider">
+                                {item.isExpired ? 'Renew Access' : 'Continue Learning'}
+                              </span>
+                            </div>
+                          )
                         ) : (
                           <div className="flex flex-row items-center justify-between flex-1 gap-2">
                             <div className="flex flex-col">

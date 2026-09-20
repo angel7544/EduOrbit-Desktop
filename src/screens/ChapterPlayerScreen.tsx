@@ -340,8 +340,21 @@ export default function ChapterPlayerScreen() {
                           fontSize: 13, fontWeight: isChapterActive ? 700 : 500,
                           color: isChapterActive ? '#6366f1' : textPrimary,
                           margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          display: 'flex', alignItems: 'center', gap: 6
                         }}>
-                          {ch.title}
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch.title}</span>
+                          {(ch.is_live || ch.live_status === 'LIVE') && (
+                            <span style={{
+                              fontSize: 9, fontWeight: 900, color: '#fff', background: '#dc2626',
+                              padding: '1px 5px', borderRadius: 4, letterSpacing: 0.5, flexShrink: 0
+                            }}>LIVE</span>
+                          )}
+                          {(ch.live_status === 'ENDED' || (!ch.is_live && ch.live_status !== 'LIVE' && ch.live_starts_at)) && (
+                            <span style={{
+                              fontSize: 8, fontWeight: 800, color: '#6366f1', background: 'rgba(99,102,241,0.15)',
+                              padding: '1px 5px', borderRadius: 4, letterSpacing: 0.5, flexShrink: 0
+                            }}>RECORDED</span>
+                          )}
                         </p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                           <Clock size={10} color={isChapterActive ? '#6366f1' : textMuted} />
@@ -483,6 +496,7 @@ export default function ChapterPlayerScreen() {
           <div style={{ position: 'relative', background: '#000', flexShrink: 0, maxHeight: '65vh' }}>
             <VideoPlayer
               url={(currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.video_url : currentChapter?.video_url) || ''}
+              title={currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title : currentChapter?.title}
               videoKey={`${user?.id || 'guest'}_${courseId}_${currentChapter?.id || ''}${currentLessonId ? `_${currentLessonId}` : ''}`}
               isDarkMode={isDarkMode}
               onEnded={() => {

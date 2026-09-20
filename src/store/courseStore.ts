@@ -264,7 +264,19 @@ export const useCourseStore = create<CourseState>((set, get) => ({
               name,
               profile_image
             ),
-            chapters (id, duration, is_published)
+            chapters (
+              id,
+              course_id,
+              title,
+              duration,
+              is_published,
+              video_url,
+              is_live,
+              live_starts_at,
+              live_ends_at,
+              live_status,
+              position
+            )
           )
         `
         )

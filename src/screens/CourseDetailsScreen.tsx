@@ -1,9 +1,9 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Play, Clock, Users, Star, CheckCircle, Lock,
+    Play, Clock, Users, Star, CheckCircle, CheckCircle2, Lock,
     ChevronDown, ChevronUp, Share2, Heart, Award, FileText,
-    AlertCircle
+    AlertCircle, Video
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCourseStore } from '../store/courseStore';
@@ -366,13 +366,73 @@ export default function CourseDetailsScreen() {
         setExpandedSection(expandedSection === id ? null : id);
     };
 
+    const isChapterLive = (ch: any) => {
+        if (!ch) return false;
+        const status = (ch.live_status || '').toUpperCase();
+        if (status === 'ENDED' || status === 'RECORDED' || status === 'CONCLUDED') return false;
+
+        const startsAt = ch.live_starts_at ? new Date(ch.live_starts_at).getTime() : null;
+        const endsAt = ch.live_ends_at ? new Date(ch.live_ends_at).getTime() : null;
+        const now = Date.now();
+
+        // If explicitly set to LIVE status
+        if (status === 'LIVE') {
+            if (endsAt && endsAt <= now) return false;
+            return true;
+        }
+
+        // If scheduled or is_live flag: strictly check the time window
+        if (ch.is_live || status === 'SCHEDULED' || startsAt) {
+            if (endsAt && endsAt <= now) return false; // ended
+            if (startsAt && startsAt > now) return false; // scheduled in the future, not live yet
+            if (startsAt && startsAt <= now && (!endsAt || endsAt > now)) return true; // currently inside live window
+            if (ch.is_live && !startsAt && (!endsAt || endsAt > now)) return true;
+        }
+
+        return false;
+    };
+
+    const isChapterRecordedLive = (ch: any) => {
+        if (!ch) return false;
+        const status = (ch.live_status || '').toUpperCase();
+        if (status === 'ENDED' || status === 'RECORDED' || status === 'CONCLUDED') return true;
+
+        const endsAt = ch.live_ends_at ? new Date(ch.live_ends_at).getTime() : null;
+        const now = Date.now();
+
+        if (endsAt && endsAt <= now && status !== 'LIVE') return true;
+        if ((ch.is_live || ch.live_starts_at) && !isChapterLive(ch) && !isChapterScheduled(ch)) return true;
+
+        return false;
+    };
+
+    const isChapterScheduled = (ch: any) => {
+        if (!ch) return false;
+        const status = (ch.live_status || '').toUpperCase();
+        if (status === 'ENDED' || status === 'RECORDED' || status === 'CONCLUDED' || status === 'LIVE') return false;
+
+        const startsAt = ch.live_starts_at ? new Date(ch.live_starts_at).getTime() : null;
+        const now = Date.now();
+
+        if (status === 'SCHEDULED' && (!startsAt || startsAt > now)) return true;
+        if ((ch.is_live || ch.live_starts_at) && startsAt && startsAt > now) return true;
+
+        return false;
+    };
+
     // Compile specific tab items
-    const regularChapters = publishedChapters
-        .filter((ch: any) => !ch.is_live)
-        .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
     const liveChapters = publishedChapters
-        .filter((ch: any) => ch.is_live)
+        .filter((ch: any) => ch.is_live || ch.live_status === 'LIVE' || ch.live_status === 'SCHEDULED' || ch.live_starts_at || ch.live_status === 'ENDED')
         .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+
+    const ongoingLiveChapters = liveChapters.filter((ch: any) => isChapterLive(ch));
+    const hasOngoingLive = ongoingLiveChapters.length > 0;
+
+    // Lessons tab displays regular chapters + ended/recorded live classes + active live classes
+    const regularChapters = publishedChapters
+        .filter((ch: any) => !isChapterScheduled(ch))
+        .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+
     const allAttachments = publishedChapters.reduce((acc: any[], chapter: any) => {
         if (Array.isArray(chapter.attachments)) {
             chapter.attachments.forEach((att: any) => {
@@ -383,6 +443,20 @@ export default function CourseDetailsScreen() {
         }
         return acc;
     }, []);
+
+    const formattedDescription = useMemo(() => {
+        if (!course?.description) return 'No description available for this course.';
+        let desc = course.description;
+        desc = desc.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        
+        // Ensure section headers like "🎯 What You'll Learn", "📌 Useful For", "📚 ..." have spacing and markdown heading syntax
+        desc = desc.replace(/(\n|^)(🎯|📌|📚|💡|🔍|⭐|🔥|✅|⚡)\s*([^\n]+)/g, '\n\n### $2 $3\n');
+        
+        // Ensure bullet points (📖, 🔄, 🧠, ✍️, 📊, 🚀, •, -) start on their own lines as list items
+        desc = desc.replace(/([^\n])\s*(📖|🔄|🧠|✍️|📊|🚀|🔹|▪️|•)\s*/g, '$1\n- $2 ');
+        
+        return desc.trim();
+    }, [course?.description]);
 
     return (
         <div className={`flex flex-col min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
@@ -405,10 +479,16 @@ export default function CourseDetailsScreen() {
                     {/* Course Header Details */}
                     <div className="flex-1 min-w-0 flex flex-col justify-between self-stretch">
                         <div>
-                            <div className="flex flex-row items-center gap-3 mb-3">
+                            <div className="flex flex-row items-center gap-3 mb-3 flex-wrap">
                                 <div className="px-2.5 py-1 rounded-md bg-primary/10">
                                     <span className="text-primary text-xs font-bold uppercase tracking-wider">{course.video_subject || 'General'}</span>
                                 </div>
+                                {hasOngoingLive && (
+                                    <div className="flex items-center gap-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-bold tracking-wide px-2.5 py-0.5 rounded-full">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
+                                        Live Class Active
+                                    </div>
+                                )}
                                 <div className="flex flex-row items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                                     <Star size={14} className="text-amber-500" fill="#f59e0b" />
                                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400">{rating}</span>
@@ -486,29 +566,109 @@ export default function CourseDetailsScreen() {
 
                 {/* Left Column - Main Tabs Details */}
                 <div className="flex-1 min-w-0 flex flex-col">
-                    <div className="flex flex-row border-b mb-6" style={{ borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
-                        {['About', 'Lessons', 'Attachments', 'Live', 'Reviews'].map((tab) => (
+
+                    {/* Ongoing Live Class Soothing Card */}
+                    {hasOngoingLive && (
+                        <div className="mb-6 p-4 rounded-2xl bg-rose-500/5 dark:bg-rose-950/20 border border-rose-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                                    <Play size={14} fill="currentColor" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-rose-600 dark:text-rose-400">
+                                            {ongoingLiveChapters[0]?.title}
+                                        </span>
+                                        <span className="bg-rose-600 text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.2 rounded-full">
+                                            Live Now
+                                        </span>
+                                    </div>
+                                    <p className={`text-xs mt-0.5 m-0 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        Interactive lecture is streaming live. Click below to join.
+                                    </p>
+                                </div>
+                            </div>
                             <button
-                                key={tab}
-                                className={`flex-1 py-3 border-b-2 cursor-pointer transition-colors bg-transparent border-none ${activeTab === tab ? 'border-primary' : 'border-transparent'}`}
-                                onClick={() => setActiveTab(tab)}
+                                onClick={() => {
+                                    if (isEnrolled && !isExpired) {
+                                        navigate('/chapterplayer', {
+                                            state: {
+                                                courseId: course.id,
+                                                chapterId: ongoingLiveChapters[0]?.id,
+                                                chapter: ongoingLiveChapters[0],
+                                                courseTitle: course.title,
+                                                hasAccess: true,
+                                                autoPlay: true
+                                            }
+                                        });
+                                    } else if (!isEnrolled) {
+                                        handleEnrollOrPlay();
+                                    } else {
+                                        alert('Please renew your access to join this live session.');
+                                    }
+                                }}
+                                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs border-none cursor-pointer transition-all shadow-sm flex items-center gap-2 flex-shrink-0"
                             >
-                                <span className={`text-sm font-bold text-center ${activeTab === tab ? 'text-primary' : (isDarkMode ? 'text-gray-400' : 'text-gray-500')}`}>
-                                    {tab}
-                                </span>
+                                <Play size={13} fill="currentColor" />
+                                Join Class
                             </button>
-                        ))}
+                        </div>
+                    )}
+
+                    {/* Tabs Header */}
+                    <div className="flex flex-row border-b mb-6" style={{ borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
+                        {['About', 'Lessons', 'Attachments', 'Live', 'Reviews'].map((tab) => {
+                            const isLiveTab = tab === 'Live';
+                            const isSelected = activeTab === tab;
+
+                            return (
+                                <button
+                                    key={tab}
+                                    className={`flex-1 py-3.5 border-b-2 cursor-pointer transition-all bg-transparent border-none flex items-center justify-center gap-2 ${isSelected ? 'border-primary' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-700'}`}
+                                    onClick={() => setActiveTab(tab)}
+                                >
+                                    <span className={`text-sm font-bold text-center ${isSelected ? 'text-primary' : (isDarkMode ? 'text-gray-400' : 'text-gray-500')}`}>
+                                        {tab}
+                                    </span>
+                                    {isLiveTab && hasOngoingLive && (
+                                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                    )}
+                                    {isLiveTab && !hasOngoingLive && liveChapters.length > 0 && (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-primary/20 text-primary' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                                            {liveChapters.length}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
 
                     <div className="pb-24">
                         {activeTab === 'About' && (
                             <div className="flex flex-col">
-                                <span className={`text-lg font-extrabold mb-3 ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>About this course</span>
+                                <span className={`text-lg font-extrabold mb-4 ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>About this course</span>
 
-                                <div
-                                    className={`text-sm leading-relaxed space-y-3 prose dark:prose-invert max-w-none ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}
-                                    dangerouslySetInnerHTML={{ __html: renderMarkdownAndHTML(course.description || 'No description available for this course.') }}
-                                />
+                                <div className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <ReactMarkdown
+                                        rehypePlugins={[rehypeRaw]}
+                                        components={{
+                                            h1: ({ node, ...props }) => <h1 className="text-xl font-black mt-5 mb-2.5 text-primary flex items-center gap-2" {...props} />,
+                                            h2: ({ node, ...props }) => <h2 className="text-lg font-extrabold mt-4 mb-2 text-primary flex items-center gap-2" {...props} />,
+                                            h3: ({ node, ...props }) => <h3 className="text-base font-bold mt-4 mb-2 text-primary flex items-center gap-2" {...props} />,
+                                            h4: ({ node, ...props }) => <h4 className="text-sm font-bold mt-3 mb-1.5 text-gray-800 dark:text-gray-200" {...props} />,
+                                            p: ({ node, ...props }) => <p className="mb-3.5 leading-relaxed whitespace-pre-line text-sm" {...props} />,
+                                            ul: ({ node, ...props }) => <ul className="list-disc pl-5 mb-4 space-y-1.5 text-sm" {...props} />,
+                                            ol: ({ node, ...props }) => <ol className="list-decimal pl-5 mb-4 space-y-1.5 text-sm" {...props} />,
+                                            li: ({ node, ...props }) => <li className="leading-relaxed pl-1" {...props} />,
+                                            strong: ({ node, ...props }) => <strong className="font-extrabold text-primary" {...props} />,
+                                            a: ({ node, ...props }) => <a className="text-primary font-bold hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+                                            blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-primary/50 pl-4 py-1.5 my-3 bg-primary/5 rounded-r-lg italic text-gray-700 dark:text-gray-300" {...props} />,
+                                            hr: ({ node, ...props }) => <hr className="my-4 border-gray-200 dark:border-gray-700" {...props} />,
+                                        }}
+                                    >
+                                        {formattedDescription}
+                                    </ReactMarkdown>
+                                </div>
                             </div>
                         )}
 
@@ -518,31 +678,49 @@ export default function CourseDetailsScreen() {
                                     regularChapters.map((chapter: any, index: number) => {
                                         const isExpanded = expandedSection === chapter.id;
                                         const isCompleted = isEnrolled && progress[course.id]?.includes(chapter.id);
+                                        const isLive = isChapterLive(chapter);
+                                        const isRecorded = isChapterRecordedLive(chapter);
 
                                         return (
-                                            <div key={chapter.id} className={`rounded-2xl overflow-hidden border transition-all duration-300 ${isDarkMode ? 'bg-gray-800/40 border-gray-700 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}>
+                                            <div key={chapter.id} className={`rounded-2xl overflow-hidden border transition-all duration-300 ${isLive ? 'border-rose-500/40 bg-rose-500/5' : isRecorded ? (isDarkMode ? 'bg-gray-800/50 border-indigo-500/30' : 'bg-white border-indigo-100 shadow-sm') : (isDarkMode ? 'bg-gray-800/40 border-gray-700 shadow-sm' : 'bg-white border-gray-100 shadow-sm')}`}>
                                                 <button
                                                     className="w-full flex flex-row items-center p-4 bg-transparent border-none cursor-pointer text-left"
                                                     onClick={() => toggleSection(chapter.id)}
                                                 >
-                                                    <div className={`w-8 h-8 rounded-xl flex justify-center items-center mr-3 ${isCompleted ? 'bg-green-500/10' : (isDarkMode ? 'bg-gray-800' : 'bg-gray-100')}`}>
+                                                    <div className={`w-8 h-8 rounded-xl flex justify-center items-center mr-3 ${isCompleted ? 'bg-green-500/10' : isLive ? 'bg-rose-500/15 text-rose-600' : isRecorded ? 'bg-indigo-500/15 text-indigo-500' : (isDarkMode ? 'bg-gray-800' : 'bg-gray-100')}`}>
                                                         {isCompleted ? (
                                                             <CheckCircle size={16} className="text-green-500" />
+                                                        ) : isLive ? (
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
                                                         ) : (
-                                                            <span className={`text-xs font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{index + 1}</span>
+                                                            <span className={`text-xs font-bold ${isRecorded ? 'text-indigo-600 dark:text-indigo-400' : isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{index + 1}</span>
                                                         )}
                                                     </div>
                                                     <div className="flex-1">
-                                                        <span className={`text-sm font-extrabold block leading-tight ${isDarkMode ? 'text-gray-50' : 'text-gray-800'}`}>
-                                                            {chapter.title}
-                                                            {chapter.is_demo && (
-                                                                <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded ml-2 align-middle">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className={`text-sm font-extrabold block leading-tight ${isDarkMode ? 'text-gray-50' : 'text-gray-800'}`}>
+                                                                {chapter.title}
+                                                            </span>
+                                                            {isLive && (
+                                                                <span className="bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-rose-500/20">
+                                                                    ● Live
+                                                                </span>
+                                                            )}
+                                                            {isRecorded && (
+                                                                <span className="bg-indigo-600/15 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-indigo-500/20">
+                                                                    📹 Recorded Live
+                                                                </span>
+                                                            )}
+                                                            {chapter.is_demo && !isLive && !isRecorded && (
+                                                                <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded ml-1 align-middle">
                                                                     Preview
                                                                 </span>
                                                             )}
-                                                        </span>
+                                                        </div>
                                                         <div className="flex flex-row items-center mt-1 mb-1">
-                                                            <span className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Video • {formatDuration(chapter.duration || 0)}</span>
+                                                            <span className={`text-[10px] font-bold ${isLive ? 'text-rose-500' : isRecorded ? 'text-indigo-600 dark:text-indigo-400' : isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                                {isLive ? 'Live Class Streaming' : isRecorded ? `Recorded Live • ${formatDuration(chapter.duration || 0)}` : `Video • ${formatDuration(chapter.duration || 0)}`}
+                                                            </span>
                                                         </div>
                                                         {chapter.description && (
                                                             <div className={`text-xs mt-1 line-clamp-2 pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -570,7 +748,15 @@ export default function CourseDetailsScreen() {
                                                         </div>
                                                         {(!chapter.lessons || chapter.lessons.length === 0 || chapter.video_url) && (
                                                             <button
-                                                                className={`w-full py-2.5 rounded-xl flex flex-row justify-center items-center gap-2 border-none transition-all duration-300 font-extrabold text-xs uppercase tracking-wider cursor-pointer ${isEnrolled && !isExpired ? 'bg-primary/10 text-primary hover:bg-primary/15' : (isDarkMode ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-500 cursor-not-allowed')}`}
+                                                                className={`w-full py-2.5 rounded-xl flex flex-row justify-center items-center gap-2 border-none transition-all duration-300 font-bold text-xs uppercase tracking-wider cursor-pointer ${
+                                                                    isEnrolled && !isExpired 
+                                                                        ? isLive 
+                                                                            ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm'
+                                                                            : isRecorded 
+                                                                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
+                                                                                : 'bg-primary/10 text-primary hover:bg-primary/15' 
+                                                                        : (isDarkMode ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-500 cursor-not-allowed')
+                                                                }`}
                                                                 onClick={() => {
                                                                     if (isEnrolled && !isExpired) {
                                                                         navigate('/chapterplayer', { state: { courseId: course.id, chapterId: chapter.id } });
@@ -579,8 +765,8 @@ export default function CourseDetailsScreen() {
                                                             >
                                                                 {isEnrolled && !isExpired ? (
                                                                     <>
-                                                                        <Play size={14} className="text-primary" fill="currentColor" />
-                                                                        <span>Play {chapter.lessons && chapter.lessons.length > 0 ? 'Chapter Video' : 'Lesson'}</span>
+                                                                        <Play size={14} className={isLive || isRecorded ? 'text-white' : 'text-primary'} fill="currentColor" />
+                                                                        <span>{isLive ? 'Join Live Class' : isRecorded ? 'Play Recorded Live' : `Play ${chapter.lessons && chapter.lessons.length > 0 ? 'Chapter Video' : 'Lesson'}`}</span>
                                                                     </>
                                                                 ) : (
                                                                     <>
@@ -683,66 +869,137 @@ export default function CourseDetailsScreen() {
                             <div className="flex flex-col gap-4">
                                 <span className={`text-lg font-extrabold mb-1 ${isDarkMode ? 'text-gray-50' : 'text-gray-800'}`}>Live Interactive Classes</span>
                                 <p className={`text-xs mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                    Stay tuned for scheduled live lecture calls, doubt discussions, and exam preparation classes.
+                                    Live classes, interactive doubt breakdowns, and past recorded live archives for this course.
                                 </p>
 
                                 {liveChapters.length > 0 ? (
                                     <div className="flex flex-col gap-4">
                                         {liveChapters.map((chapter: any) => {
-                                            const isLive = chapter.live_status === 'LIVE';
-                                            const isScheduled = chapter.live_status === 'SCHEDULED' || (!chapter.live_status && new Date(chapter.live_starts_at) > new Date());
-                                            const isEnded = chapter.live_status === 'ENDED';
+                                            const isLive = isChapterLive(chapter);
+                                            const isRecorded = isChapterRecordedLive(chapter);
+                                            const isScheduled = isChapterScheduled(chapter);
+                                            const hasVideoRecording = Boolean(chapter.video_url || chapter.stream_url);
 
                                             return (
                                                 <div
                                                     key={chapter.id}
-                                                    className={`p-5 rounded-2xl border transition-all duration-300 hover:shadow-md ${isLive ? 'border-red-500 bg-red-500/5 dark:bg-red-500/10' : (isDarkMode ? 'bg-gray-800/40 border-gray-700' : 'bg-white border-gray-100')}`}
+                                                    className={`p-5 rounded-2xl border transition-all duration-300 hover:shadow-md ${
+                                                        isLive
+                                                            ? 'border-red-500 bg-red-500/5 dark:bg-red-500/10 shadow-lg shadow-red-500/10'
+                                                            : isRecorded
+                                                                ? (isDarkMode ? 'border-indigo-500/30 bg-indigo-950/20' : 'border-indigo-200 bg-indigo-50/50')
+                                                                : (isDarkMode ? 'bg-gray-800/40 border-gray-700' : 'bg-white border-gray-100')
+                                                    }`}
                                                 >
                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                                         <div className="flex-1">
                                                             <div className="flex items-center gap-2 mb-2">
                                                                 {isLive && (
-                                                                    <span className="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full animate-pulse">
-                                                                        ● LIVE NOW
+                                                                    <span className="flex items-center gap-1.5 bg-red-600 text-white text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full animate-pulse shadow-sm shadow-red-500/40">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                                                                        🔴 LIVE NOW
+                                                                    </span>
+                                                                )}
+                                                                {isRecorded && (
+                                                                    <span className="flex items-center gap-1 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                                                                        <Video size={10} />
+                                                                        📹 Recorded Live Class
                                                                     </span>
                                                                 )}
                                                                 {isScheduled && (
-                                                                    <span className="bg-primary/10 text-primary text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-                                                                        Scheduled
-                                                                    </span>
-                                                                )}
-                                                                {isEnded && (
-                                                                    <span className="bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-                                                                        Ended
+                                                                    <span className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                                                                        ⏰ Live Scheduled
                                                                     </span>
                                                                 )}
                                                             </div>
                                                             <h4 className={`text-sm font-extrabold ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{chapter.title}</h4>
                                                             <p className={`text-xs mt-1.5 leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                                                {chapter.description || 'Live interaction class for core chapter breakdown and feedback.'}
+                                                                {chapter.description || (isRecorded ? 'Recorded archive of the live interactive lecture.' : 'Live interactive lecture for topic mastery.')}
                                                             </p>
                                                             <div className="flex flex-row items-center gap-2 mt-4 text-[10px] font-bold text-textLight">
-                                                                <Clock size={14} className="text-primary/70" />
+                                                                <Clock size={14} className={isLive ? 'text-red-500' : isRecorded ? 'text-indigo-500' : 'text-primary/70'} />
                                                                 <span>
-                                                                    Starts: {chapter.live_starts_at ? new Date(chapter.live_starts_at).toLocaleString() : 'TBD'}
+                                                                    {isRecorded
+                                                                        ? `Concluded: ${chapter.live_ends_at ? new Date(chapter.live_ends_at).toLocaleString() : (chapter.live_starts_at ? new Date(chapter.live_starts_at).toLocaleDateString() : 'Completed')}`
+                                                                        : `Starts: ${chapter.live_starts_at ? new Date(chapter.live_starts_at).toLocaleString() : 'TBD'}`}
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (isEnrolled && !isExpired && chapter.video_url) {
-                                                                    window.open(chapter.video_url, '_blank');
-                                                                } else if (!isEnrolled) {
-                                                                    alert('Please enroll in the course to join the live session.');
-                                                                } else {
-                                                                    alert('Live session link is not available or hasn\'t started yet.');
-                                                                }
-                                                            }}
-                                                            disabled={isEnded || (!isLive && !chapter.video_url)}
-                                                            className={`px-5 py-3 rounded-xl font-extrabold text-xs uppercase tracking-wider text-center border-none transition-all duration-300 ${isLive && isEnrolled && !isExpired ? 'bg-red-500 text-white cursor-pointer hover:bg-red-600 hover:shadow-lg shadow-red-500/20' : (isScheduled && isEnrolled && !isExpired && chapter.video_url ? 'bg-primary text-white cursor-pointer hover:bg-primary/95' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed')}`}
-                                                        >
-                                                            {isLive ? 'Join Live Now' : (isEnded ? 'Session Ended' : 'Join Session')}
-                                                        </button>
+
+                                                        {/* Action Buttons: Only show Join when LIVE. If recorded & has video, show Watch Recording. If no live, hide Join! */}
+                                                        {isLive ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (!user) {
+                                                                        alert('Please log in to join this session.');
+                                                                        return;
+                                                                    }
+                                                                    if (!isEnrolled) {
+                                                                        handleEnrollOrPlay();
+                                                                        return;
+                                                                    }
+                                                                    if (isExpired) {
+                                                                        alert('Your course access has expired. Please renew your enrollment.');
+                                                                        return;
+                                                                    }
+                                                                    navigate('/chapterplayer', {
+                                                                        state: {
+                                                                            courseId: course.id,
+                                                                            chapterId: chapter.id,
+                                                                            chapter: chapter,
+                                                                            courseTitle: course.title,
+                                                                            hasAccess: true,
+                                                                            autoPlay: true
+                                                                        }
+                                                                    });
+                                                                }}
+                                                                className="px-5 py-3 rounded-xl font-extrabold text-xs uppercase tracking-wider text-center border-none transition-all duration-300 bg-red-600 hover:bg-red-700 text-white cursor-pointer shadow-lg shadow-red-600/30 animate-pulse flex items-center justify-center gap-2 flex-shrink-0"
+                                                            >
+                                                                <Play size={14} fill="#fff" />
+                                                                Join Live Class Now
+                                                            </button>
+                                                        ) : isRecorded && hasVideoRecording ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (!user) {
+                                                                        alert('Please log in to watch this recording.');
+                                                                        return;
+                                                                    }
+                                                                    if (!isEnrolled) {
+                                                                        handleEnrollOrPlay();
+                                                                        return;
+                                                                    }
+                                                                    if (isExpired) {
+                                                                        alert('Your course access has expired. Please renew your enrollment.');
+                                                                        return;
+                                                                    }
+                                                                    navigate('/chapterplayer', {
+                                                                        state: {
+                                                                            courseId: course.id,
+                                                                            chapterId: chapter.id,
+                                                                            chapter: chapter,
+                                                                            courseTitle: course.title,
+                                                                            hasAccess: true,
+                                                                            autoPlay: true
+                                                                        }
+                                                                    });
+                                                                }}
+                                                                className="px-5 py-3 rounded-xl font-extrabold text-xs uppercase tracking-wider text-center border-none transition-all duration-300 bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 flex-shrink-0"
+                                                            >
+                                                                <Play size={14} fill="#fff" />
+                                                                Watch Recording
+                                                            </button>
+                                                        ) : isRecorded && !hasVideoRecording ? (
+                                                            <div className="px-4 py-2 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs font-bold flex items-center gap-1.5 flex-shrink-0">
+                                                                <CheckCircle2 size={13} />
+                                                                Session Concluded
+                                                            </div>
+                                                        ) : isScheduled ? (
+                                                            <div className="px-4 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20 flex items-center gap-1.5 flex-shrink-0">
+                                                                <Clock size={13} />
+                                                                Live Soon
+                                                            </div>
+                                                        ) : null}
                                                     </div>
                                                 </div>
                                             );

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, ChevronLeft, Clock, User, BookOpen, Lock } from 'lucide-react';
+import { Search, ChevronLeft, Clock, User, BookOpen, Lock, Play } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCourseStore } from '../store/courseStore';
 import { formatDuration } from '../lib/utils';
@@ -180,114 +180,158 @@ export default function MyCoursesScreen() {
               </span>
             </div>
           ) : (
-            filteredCourses.map((item) => (
-              <div
-                key={item.id}
-                className={`group flex flex-col rounded-[20px] overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 ${isDarkMode ? 'bg-gray-800/80 border border-gray-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:border-gray-700 hover:-translate-y-1' : 'bg-white border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:-translate-y-1 hover:border-gray-200'} ${item.isExpired ? 'opacity-70 hover:opacity-100' : ''}`}
-                onClick={() => {
-                  if (item.isExpired) {
-                    if (window.confirm('Your access to this course has expired. Would you like to renew it?')) {
-                      const renewalMessage = `I would like to renew my subscription for the course: "${item.title}" (ID: ${item.id}). Please assist me with the renewal process.`;
-                      navigate('/chatdetail', { state: {
-                        initialMessage: renewalMessage,
-                        autoSend: true,
-                        forceNewTicket: true
-                      } });
-                    }
-                    return;
-                  }
-                  navigate('/coursedetails', { state: {
-                    course: {
-                      id: item.id,
-                      title: item.title,
-                      raw: item.raw,
-                    },
-                  } });
-                }}
-              >
-                <div className={`relative overflow-hidden aspect-[16/9] w-full border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-100'}`}>
-                  <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-black/5" />
-                  
-                  <div className={`absolute top-3 left-3 px-2 py-1 rounded-md z-10 ${item.isExpired ? 'bg-red-500' : 'bg-primary'}`}>
-                    <span className="text-white text-[10px] font-bold">{item.isExpired ? 'EXPIRED' : item.category.toUpperCase()}</span>
-                  </div>
+            filteredCourses.map((item) => {
+              const allChapters = item.raw?.chapters || [];
+              const ongoingLiveChapter = allChapters.find((ch: any) =>
+                ch.is_published !== false && (
+                  ch.live_status === 'LIVE' ||
+                  (ch.is_live && (!ch.live_ends_at || new Date(ch.live_ends_at) > new Date()) && (!ch.live_starts_at || new Date(ch.live_starts_at) <= new Date()))
+                )
+              );
+              const upcomingLiveChapter = !ongoingLiveChapter ? allChapters.find((ch: any) =>
+                ch.is_published !== false && (
+                  ch.live_status === 'SCHEDULED' ||
+                  (ch.is_live && ch.live_starts_at && new Date(ch.live_starts_at) > new Date())
+                )
+              ) : null;
 
-                  <div className={`absolute top-3 right-3 flex flex-row items-center px-2 py-1 rounded-md gap-1 z-10 ${item.isExpired ? 'bg-red-500' : (item.expiryInfo === 'Lifetime Access' ? 'bg-green-500' : 'bg-amber-500')}`}>
-                    <Clock size={12} color="#fff" />
-                    <span className="text-white text-[10px] font-bold">{item.expiryInfo}</span>
-                  </div>
-
-                  {item.isExpired && (
-                    <div className="absolute inset-0 bg-black/60 flex flex-col justify-center items-center z-20">
-                      <Lock size={32} color="#fff" />
-                      <span className="text-white text-lg font-bold mt-2 tracking-[2px]">EXPIRED</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2 block">
-                      {item.category || 'Course'}
-                    </span>
-                    <span className={`block text-base font-extrabold leading-snug mb-4 line-clamp-2 transition-colors duration-300 group-hover:text-primary ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>
-                      {item.title}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-row items-center mb-4 gap-3">
-                    <div className="flex flex-row items-center gap-1.5">
-                      <BookOpen size={12} className={isDarkMode ? 'text-gray-400' : 'text-gray-500'} />
-                      <span className={`text-[13px] font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{item.duration} • {item.totalCount} Lessons</span>
-                    </div>
-                    <div className={`w-px h-3.5 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
-                    <div className="flex flex-row items-center gap-1.5">
-                      <User size={12} className={isDarkMode ? 'text-gray-400' : 'text-gray-500'} />
-                      <span className={`text-[13px] font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Enrolled</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-5">
-                    <div className="flex flex-row justify-between mb-2.5">
-                      <span className={`text-sm font-semibold ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{item.percentage}% Complete</span>
-                    </div>
-                    <div className={`h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                      <div className={`h-full rounded-full transition-all duration-300 ${item.isExpired ? 'bg-gray-500' : 'bg-primary'}`} style={{ width: `${item.percentage}%` }} />
-                    </div>
-                  </div>
-
-                  <button
-                    className={`w-full py-3.5 rounded-lg flex items-center justify-center border-none cursor-pointer transition-opacity hover:opacity-90 ${item.isExpired ? (isDarkMode ? 'bg-gray-700' : 'bg-gray-200') : 'bg-primary'}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (item.isExpired) {
-                        if (window.confirm('Your access to this course has expired. Would you like to renew it?')) {
-                          const renewalMessage = `I would like to renew my subscription for the course: "${item.title}" (ID: ${item.id}). Please assist me with the renewal process.`;
-                          navigate('/chatdetail', { state: {
-                            initialMessage: renewalMessage,
-                            autoSend: true,
-                            forceNewTicket: true
-                          } });
-                        }
-                        return;
+              return (
+                <div
+                  key={item.id}
+                  className={`group flex flex-col rounded-[20px] overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 ${isDarkMode ? 'bg-gray-800/80 border border-gray-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:border-gray-700 hover:-translate-y-1' : 'bg-white border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:-translate-y-1 hover:border-gray-200'} ${item.isExpired ? 'opacity-70 hover:opacity-100' : ''}`}
+                  onClick={() => {
+                    if (item.isExpired) {
+                      if (window.confirm('Your access to this course has expired. Would you like to renew it?')) {
+                        const renewalMessage = `I would like to renew my subscription for the course: "${item.title}" (ID: ${item.id}). Please assist me with the renewal process.`;
+                        navigate('/chatdetail', { state: {
+                          initialMessage: renewalMessage,
+                          autoSend: true,
+                          forceNewTicket: true
+                        } });
                       }
-                      navigate('/coursedetails', { state: {
-                        course: {
-                          id: item.id,
-                          title: item.title,
-                          raw: item.raw,
-                        },
-                      } });
-                    }}
-                  >
-                    <span className={`text-base font-semibold ${item.isExpired ? (isDarkMode ? 'text-gray-400' : 'text-gray-500') : 'text-white'}`}>
-                      {item.isExpired ? 'Renew Access' : 'Resume Learning'}
-                    </span>
-                  </button>
+                      return;
+                    }
+                    navigate('/coursedetails', { state: {
+                      course: {
+                        id: item.id,
+                        title: item.title,
+                        raw: item.raw,
+                      },
+                    } });
+                  }}
+                >
+                  <div className={`relative overflow-hidden aspect-[16/9] w-full border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-100'}`}>
+                    <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110" />
+                    <div className="absolute inset-0 bg-black/5" />
+                    
+                    <div className={`absolute top-3 left-3 px-2 py-1 rounded-md z-10 ${item.isExpired ? 'bg-red-500' : 'bg-primary'}`}>
+                      <span className="text-white text-[10px] font-bold">{item.isExpired ? 'EXPIRED' : item.category.toUpperCase()}</span>
+                    </div>
+
+                    {ongoingLiveChapter ? (
+                      <div className="absolute top-3 right-3 flex flex-row items-center px-2.5 py-1 rounded-full gap-1.5 z-10 bg-red-600 shadow-lg animate-pulse">
+                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                        <span className="text-white text-[10px] font-black tracking-wider uppercase">LIVE NOW</span>
+                      </div>
+                    ) : (
+                      <div className={`absolute top-3 right-3 flex flex-row items-center px-2 py-1 rounded-md gap-1 z-10 ${item.isExpired ? 'bg-red-500' : (item.expiryInfo === 'Lifetime Access' ? 'bg-green-500' : 'bg-amber-500')}`}>
+                        <Clock size={12} color="#fff" />
+                        <span className="text-white text-[10px] font-bold">{item.expiryInfo}</span>
+                      </div>
+                    )}
+
+                    {item.isExpired && (
+                      <div className="absolute inset-0 bg-black/60 flex flex-col justify-center items-center z-20">
+                        <Lock size={32} color="#fff" />
+                        <span className="text-white text-lg font-bold mt-2 tracking-[2px]">EXPIRED</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2 block">
+                        {item.category || 'Course'}
+                      </span>
+                      <span className={`block text-base font-extrabold leading-snug mb-4 line-clamp-2 transition-colors duration-300 group-hover:text-primary ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>
+                        {item.title}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-row items-center mb-4 gap-3">
+                      <div className="flex flex-row items-center gap-1.5">
+                        <BookOpen size={12} className={isDarkMode ? 'text-gray-400' : 'text-gray-500'} />
+                        <span className={`text-[13px] font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{item.duration} • {item.totalCount} Lessons</span>
+                      </div>
+                      <div className={`w-px h-3.5 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
+                      <div className="flex flex-row items-center gap-1.5">
+                        <User size={12} className={isDarkMode ? 'text-gray-400' : 'text-gray-500'} />
+                        <span className={`text-[13px] font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Enrolled</span>
+                      </div>
+                    </div>
+
+                    <div className="mb-5">
+                      <div className="flex flex-row justify-between mb-2.5">
+                        <span className={`text-sm font-semibold ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{item.percentage}% Complete</span>
+                      </div>
+                      <div className={`h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                        <div className={`h-full rounded-full transition-all duration-300 ${item.isExpired ? 'bg-gray-500' : 'bg-primary'}`} style={{ width: `${item.percentage}%` }} />
+                      </div>
+                    </div>
+
+                    {ongoingLiveChapter && !item.isExpired ? (
+                      <button
+                        className="w-full py-3.5 rounded-lg flex items-center justify-center gap-2 border-none cursor-pointer transition-all bg-red-600 hover:bg-red-700 text-white font-extrabold shadow-lg shadow-red-600/20"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/chapter-player', {
+                            state: {
+                              courseId: item.id,
+                              chapterId: ongoingLiveChapter.id,
+                              chapter: ongoingLiveChapter,
+                              courseTitle: item.title,
+                              hasAccess: true
+                            }
+                          });
+                        }}
+                      >
+                        <Play size={16} fill="#fff" />
+                        <span className="text-base font-bold text-white">Join Live Session</span>
+                      </button>
+                    ) : (
+                      <button
+                        className={`w-full py-3.5 rounded-lg flex items-center justify-center border-none cursor-pointer transition-opacity hover:opacity-90 ${item.isExpired ? (isDarkMode ? 'bg-gray-700' : 'bg-gray-200') : 'bg-primary'}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (item.isExpired) {
+                            if (window.confirm('Your access to this course has expired. Would you like to renew it?')) {
+                              const renewalMessage = `I would like to renew my subscription for the course: "${item.title}" (ID: ${item.id}). Please assist me with the renewal process.`;
+                              navigate('/chatdetail', { state: {
+                                initialMessage: renewalMessage,
+                                autoSend: true,
+                                forceNewTicket: true
+                              } });
+                            }
+                            return;
+                          }
+                          navigate('/coursedetails', { state: {
+                            course: {
+                              id: item.id,
+                              title: item.title,
+                              raw: item.raw,
+                            },
+                          } });
+                        }}
+                      >
+                        <span className={`text-base font-semibold ${item.isExpired ? (isDarkMode ? 'text-gray-400' : 'text-gray-500') : 'text-white'}`}>
+                          {item.isExpired ? 'Renew Access' : 'Resume Learning'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

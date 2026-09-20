@@ -149,6 +149,7 @@ export default function App() {
             </Route>
 
             <Route path="/chapterplayer" element={<ChapterPlayerScreen />} />
+            <Route path="/chapter-player" element={<ChapterPlayerScreen />} />
             <Route path="/attachmentviewer" element={<AttachmentViewerScreen />} />
             <Route path="/purchase" element={<PurchaseScreen />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
