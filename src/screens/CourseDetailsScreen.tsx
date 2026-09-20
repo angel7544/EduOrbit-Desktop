@@ -219,8 +219,11 @@ export default function CourseDetailsScreen() {
                         .filter((ch: any) => ch.is_published !== false)
                         .map((ch: any) => ({
                             ...ch,
-                            lessons: (ch.lessons || []).filter((l: any) => l.is_published !== false)
-                        }));
+                            lessons: (ch.lessons || [])
+                                .filter((l: any) => l.is_published !== false)
+                                .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
+                        }))
+                        .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
                     const normalized = {
                         ...data,
                         chapters: filteredChapters,

@@ -143,7 +143,9 @@ export default function ChapterPlayerScreen() {
               .filter((ch: any) => ch.is_published !== false)
               .map((ch: any) => ({
                 ...ch,
-                lessons: (ch.lessons || []).filter((l: any) => l.is_published !== false)
+                lessons: (ch.lessons || [])
+                  .filter((l: any) => l.is_published !== false)
+                  .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
               }))
               .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
 
@@ -167,7 +169,9 @@ export default function ChapterPlayerScreen() {
               .single();
 
             if (chapter) {
-              const filteredLessons = (chapter.lessons || []).filter((l: any) => l.is_published !== false);
+              const filteredLessons = (chapter.lessons || [])
+                .filter((l: any) => l.is_published !== false)
+                .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
               activeCh = { ...chapter, lessons: filteredLessons };
             }
           }
@@ -230,7 +234,9 @@ export default function ChapterPlayerScreen() {
           .map((ch: any) => ({
             ...ch,
             video_url: ch.video_url || ch.stream_url || ch.youtube_url || ch.live_stream_url,
-            lessons: (ch.lessons || []).filter((l: any) => l.is_published !== false)
+            lessons: (ch.lessons || [])
+              .filter((l: any) => l.is_published !== false)
+              .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
           }))
           .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
 
@@ -702,7 +708,9 @@ export default function ChapterPlayerScreen() {
                   {/* Lessons */}
                   {isExpanded && ch.lessons && ch.lessons.length > 0 && (
                     <div style={{ background: isDarkMode ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)' }}>
-                      {ch.lessons.map((lesson: any) => {
+                      {[...ch.lessons]
+                        .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
+                        .map((lesson: any) => {
                         const isLessonActive = currentLessonId === lesson.id;
                         const isLessonLocked = !lesson.is_free && !hasAccess;
 
