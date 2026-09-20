@@ -15,6 +15,7 @@ import { supabase } from '../lib/supabase';
 import { AppLoader } from '../components/AppLoader';
 import { Avatar } from '../components/Avatar';
 import { formatWatchTime } from '../lib/format';
+import { LiveCountdown, LiveViewerBadge } from '../components/LiveCountdown';
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
@@ -26,7 +27,7 @@ export default function DashboardScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [liveChapters, setLiveChapters] = useState<any[]>([]);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(() => courses.length === 0 && myCourses.length === 0);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [streakCount, setStreakCount] = useState(1);
@@ -155,29 +156,58 @@ export default function DashboardScreen() {
     } catch (e) { console.error('Notifications fetch error:', e); }
   };
 
+  const parseSafeDate = (d: any): Date | null => {
+    if (!d) return null;
+    const parsed = new Date(d);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const formatLiveTime = (dateStr: any) => {
+    const d = parseSafeDate(dateStr);
+    if (!d) return 'Scheduled';
+    try {
+      return d.toLocaleString('en-IN', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return 'Scheduled';
+    }
+  };
+
   const isChapterLive = (ch: any) => {
     if (!ch) return false;
-    const status = (ch.live_status || '').toUpperCase();
+    const status = String(ch.live_status || '').toUpperCase();
     if (status === 'LIVE') return true;
     if (status === 'ENDED' || status === 'RECORDED' || status === 'CONCLUDED') return false;
-    if (ch.is_live) {
-      if (ch.live_ends_at && new Date(ch.live_ends_at) <= new Date()) return false;
-      if (ch.live_starts_at && new Date(ch.live_starts_at) <= new Date()) return true;
-      if (!ch.live_starts_at) return true;
-    }
+    const endsAt = parseSafeDate(ch.live_ends_at);
+    const startsAt = parseSafeDate(ch.live_starts_at);
+    const now = new Date();
+    if (endsAt && endsAt <= now) return false;
+    if (startsAt && startsAt > now) return false;
+    if (startsAt && startsAt <= now) return true;
+    if (ch.is_live && !startsAt) return true;
     return false;
   };
 
   const isChapterScheduled = (ch: any) => {
     if (!ch) return false;
-    const status = (ch.live_status || '').toUpperCase();
-    if (status === 'SCHEDULED') return true;
-    if (ch.is_live && ch.live_starts_at && new Date(ch.live_starts_at) > new Date()) return true;
+    const status = String(ch.live_status || '').toUpperCase();
+    if (status === 'ENDED' || status === 'RECORDED' || status === 'CONCLUDED' || status === 'LIVE') return false;
+    const startsAt = parseSafeDate(ch.live_starts_at);
+    const now = new Date();
+    if (startsAt && startsAt > now) return true;
+    if (!startsAt && status === 'SCHEDULED') return true;
     return false;
   };
 
   const handleDirectJoinLive = (ch: any, courseObj?: any) => {
-    const courseData = courseObj || ch.courses || { id: ch.course_id, title: 'Live Class Course' };
+    const rawCourse = courseObj || ch.courses || ch.course;
+    const resolvedCourse = Array.isArray(rawCourse) ? rawCourse[0] : rawCourse;
+    const courseData = resolvedCourse || { id: ch.course_id, title: 'Live Class Course' };
     navigate('/chapterplayer', {
       state: {
         courseId: ch.course_id || courseData.id,
@@ -207,18 +237,32 @@ export default function DashboardScreen() {
       }
 
       const now = new Date();
-      const activeOrUpcoming = (data || []).filter((ch: any) => {
-        if (ch.is_published === false) return false;
-        const status = (ch.live_status || '').toUpperCase();
-        if (status === 'ENDED' || status === 'RECORDED' || status === 'CONCLUDED') return false;
-        if (status === 'LIVE') return true;
-        if (ch.live_ends_at && new Date(ch.live_ends_at) <= now) return false;
-        if (ch.is_live) {
-          if (ch.live_starts_at && new Date(ch.live_starts_at) <= now) return true;
-          if (!ch.live_starts_at) return true;
-        }
-        return true;
-      });
+      const allStoreCourses = useCourseStore.getState().courses || [];
+      const activeOrUpcoming = (data || [])
+        .map((ch: any) => {
+          const rawCourse = Array.isArray(ch.courses) ? ch.courses[0] : ch.courses;
+          const fallbackCourse = allStoreCourses.find((c: any) => c.id === ch.course_id);
+          const resolvedCourse = rawCourse || fallbackCourse || { id: ch.course_id, title: 'Live Class Course' };
+          return {
+            ...ch,
+            courses: resolvedCourse,
+            course: resolvedCourse
+          };
+        })
+        .filter((ch: any) => {
+          if (ch.is_published === false) return false;
+          const status = String(ch.live_status || '').toUpperCase();
+          if (status === 'ENDED' || status === 'RECORDED' || status === 'CONCLUDED') return false;
+          if (status === 'LIVE') return true;
+          const endsAt = parseSafeDate(ch.live_ends_at);
+          if (endsAt && endsAt <= now) return false;
+          if (ch.is_live) {
+            const startsAt = parseSafeDate(ch.live_starts_at);
+            if (startsAt && startsAt <= now) return true;
+            if (!startsAt) return true;
+          }
+          return true;
+        });
       setLiveChapters(activeOrUpcoming);
     } catch (e) { console.error('Error fetching live chapters:', e); }
   };
@@ -310,19 +354,23 @@ export default function DashboardScreen() {
 
   const initDashboard = useCallback(async () => {
     setLoadingError(null);
-    setIsInitialLoading(true);
-    try {
-      const minTimePromise = new Promise(resolve => setTimeout(resolve, 1000));
-      await Promise.all([loadData(), minTimePromise]);
-      const currentError = useCourseStore.getState().error;
-      if (currentError) setLoadingError(currentError);
-      else setIsInitialLoading(false);
-    } catch (e) {
-      setLoadingError('Failed to load dashboard data. Please check your internet connection.');
+    if (!courses.length && !myCourses.length) {
+      setIsInitialLoading(true);
     }
-  }, [loadData]);
+    try {
+      await loadData();
+    } catch (e) {
+      if (!courses.length && !myCourses.length) {
+        setLoadingError('Failed to load dashboard data. Please check your internet connection.');
+      }
+    } finally {
+      setIsInitialLoading(false);
+    }
+  }, [loadData, courses.length, myCourses.length]);
 
-  useEffect(() => { initDashboard(); }, [initDashboard]);
+  useEffect(() => {
+    initDashboard();
+  }, [user?.id]);
 
   useEffect(() => {
     const channel = supabase.channel('public:chapters')
@@ -336,7 +384,7 @@ export default function DashboardScreen() {
     if (user) {
       fetchNotifications();
     }
-  }, [user, myCourses]);
+  }, [user?.id, myCourses.length]);
 
   // Realtime notification subscriptions on dashboard
   useEffect(() => {
@@ -354,7 +402,7 @@ export default function DashboardScreen() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [myCourses, user]);
+  }, [user?.id]);
 
   const getGreeting = () => {
     const h = new Date().getHours();
@@ -373,7 +421,7 @@ export default function DashboardScreen() {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
-  if (isInitialLoading || loadingError) {
+  if ((isInitialLoading && !courses.length && !myCourses.length) || (loadingError && !courses.length && !myCourses.length)) {
     return <AppLoader isLoading={isInitialLoading} error={loadingError} onRetry={initDashboard} />;
   }
 
@@ -437,10 +485,34 @@ export default function DashboardScreen() {
 
 
 
-  // Continue learning — most recent enrolled courses
-  const continueLearning = myCourses.slice(0, 4);
+  // Continue learning — prioritize most recently watched course session
+  const lastSession = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('eduorbit_last_accessed_session');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const continueLearning = useMemo(() => {
+    if (!myCourses.length) return [];
+    if (lastSession?.courseId) {
+      const matched = myCourses.find(c => c.id === lastSession.courseId);
+      if (matched) {
+        const others = myCourses.filter(c => c.id !== lastSession.courseId);
+        return [matched, ...others].slice(0, 4);
+      }
+    }
+    return myCourses.slice(0, 4);
+  }, [myCourses, lastSession]);
+
   const activeCourse = continueLearning[0];
   const activeCourseChapters = activeCourse?.chapters?.filter((ch: any) => ch.is_published !== false) || [];
+  const lastWatchedChapter = activeCourse
+    ? (activeCourseChapters.find((ch: any) => ch.id === lastSession?.chapterId) || activeCourseChapters[0])
+    : null;
+
   const activeProgress = activeCourse
     ? (activeCourseChapters.length ? Math.round(((progress?.[activeCourse.id]?.length || 0) / activeCourseChapters.length) * 100) : 0)
     : 0;
@@ -453,81 +525,118 @@ export default function DashboardScreen() {
   return (
     <div style={{ minHeight: '100vh', background: bg }}>
 
-      {/* ── Top Search/Header Bar ── */}
+      {/* ── Top Search/Header Bar with Integrated Greeting & Progress ── */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 40,
         background: isDarkMode ? '#0f172a' : '#ffffff',
         borderBottom: `1px solid ${border}`,
-        padding: '12px 24px',
-        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '10px 24px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
         boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
       }}>
-        {/* Search bar */}
+        {/* Left: Greeting & Compact Progress */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0, flexShrink: 0 }}>
+          <div>
+            <h2 style={{ fontSize: 15, fontWeight: 800, color: textPrimary, margin: 0, letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
+              {getGreeting()}, {user?.name?.split(' ')[0] || 'Learner'} 👋
+            </h2>
+            <p style={{ fontSize: 11, color: textMuted, margin: '2px 0 0', whiteSpace: 'nowrap' }}>
+              Keep up your learning momentum
+            </p>
+          </div>
+
+          {/* Compact Progress Widget */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: isDarkMode ? 'rgba(255,255,255,0.04)' : '#f8fafc',
+            border: `1px solid ${border}`,
+            padding: '5px 12px', borderRadius: 12
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Progress</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#6366f1' }}>{combinedProgress}%</span>
+              </div>
+              <div style={{ width: 90, height: 5, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{
+                  width: `${combinedProgress}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                  borderRadius: 99,
+                  transition: 'width 0.8s ease'
+                }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Search bar */}
         <button
           onClick={() => setIsSearchExpanded(true)}
           style={{
             flex: 1, display: 'flex', alignItems: 'center', gap: 10,
             background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
             border: `1px solid ${border}`, borderRadius: 10,
-            padding: '9px 14px', cursor: 'pointer',
-            maxWidth: 500,
+            padding: '8px 14px', cursor: 'pointer',
+            maxWidth: 380, minWidth: 160
           }}
         >
-          <Search size={15} color={textMuted} />
-          <span style={{ fontSize: 13, color: textMuted }}>Search courses, resources, students...</span>
+          <Search size={14} color={textMuted} />
+          <span style={{ fontSize: 12, color: textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Search courses, resources...</span>
           <span style={{
-            marginLeft: 'auto', fontSize: 11, color: textMuted,
+            marginLeft: 'auto', fontSize: 10, color: textMuted,
             background: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-            padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace',
+            padding: '1px 5px', borderRadius: 4, fontFamily: 'monospace',
           }}>⌘ K</span>
         </button>
 
         {/* Right icons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {/* Panel Toggle Button */}
           <button
             onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
+            title={isRightPanelOpen ? 'Collapse side panel' : 'Expand side panel'}
             style={{
-              position: 'relative', width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer',
-              background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginRight: 8
+              position: 'relative', width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}
           >
-            {isRightPanelOpen ? <ChevronRight size={18} color={textMuted} /> : <ChevronLeft size={18} color={textMuted} />}
+            {isRightPanelOpen ? <ChevronRight size={16} color={textMuted} /> : <ChevronLeft size={16} color={textMuted} />}
           </button>
           
           <div style={{
             display: 'flex', alignItems: 'center', gap: 4,
-            background: 'rgba(249,115,22,0.1)', padding: '5px 10px', borderRadius: 20,
+            background: 'rgba(249,115,22,0.1)', padding: '4px 9px', borderRadius: 20,
             border: '1px solid rgba(249,115,22,0.2)',
           }}>
-            <Flame size={14} color="#f97316" />
-            <span style={{ fontSize: 12, fontWeight: 800, color: '#f97316' }}>{streakCount}</span>
+            <Flame size={13} color="#f97316" />
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#f97316' }}>{streakCount}</span>
           </div>
+
           <button
             onClick={() => navigate('/notifications')}
-            style={{ position: 'relative', width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ position: 'relative', width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            <Bell size={18} color={textMuted} />
+            <Bell size={16} color={textMuted} />
             {unreadCount > 0 && (
               <div style={{
                 position: 'absolute',
-                top: -4,
-                right: -4,
-                minWidth: 16,
-                height: 16,
+                top: -3,
+                right: -3,
+                minWidth: 15,
+                height: 15,
                 borderRadius: 8,
                 backgroundColor: '#ef4444',
                 border: `2px solid ${isDarkMode ? '#0f172a' : '#ffffff'}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '0 3px',
+                padding: '0 2px',
                 zIndex: 10
               }}>
                 <span style={{
                   color: 'white',
-                  fontSize: 9,
+                  fontSize: 8,
                   fontWeight: 'bold',
                   lineHeight: 1
                 }}>
@@ -536,8 +645,9 @@ export default function DashboardScreen() {
               </div>
             )}
           </button>
+          
           <button onClick={() => navigate('/profile')} style={{ border: 'none', cursor: 'pointer', background: 'transparent', padding: 0 }}>
-            <Avatar uri={user?.profileImage} name={user?.name} size={36} />
+            <Avatar uri={user?.profileImage} name={user?.name} size={34} />
           </button>
         </div>
       </div>
@@ -563,72 +673,32 @@ export default function DashboardScreen() {
       )}
 
       {/* ── Main Two-Column Layout ── */}
-      <div style={{ display: 'flex', gap: 0, maxWidth: 1440, margin: '0 auto' }}>
+      <div style={{ display: 'flex', gap: 0, width: '100%' }}>
 
         {/* ═══ LEFT COLUMN ═══ */}
-        <div style={{ flex: 1, minWidth: 0, padding: '28px 28px 40px' }}>
+        <div style={{ flex: 1, minWidth: 0, padding: '24px 28px 40px' }}>
 
-          {/* Welcome & Progress */}
-          <div style={{ 
-            marginBottom: 24, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            background: isDarkMode ? '#1e293b' : '#ffffff',
-            padding: '24px',
-            borderRadius: '20px',
-            border: `1px solid ${border}`,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
-          }}>
-            <div>
-              <h2 style={{ fontSize: 26, fontWeight: 800, color: textPrimary, margin: 0, letterSpacing: '-0.4px' }}>
-                {getGreeting()}, {user?.name?.split(' ')[0] || 'Learner'} 👋
-              </h2>
-              <p style={{ fontSize: 14, color: textMuted, margin: '6px 0 0' }}>
-                Let's continue your learning journey today.
-              </p>
-            </div>
-            
-            <div style={{ minWidth: '220px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: textPrimary }}>Overall Progress</span>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#6366f1' }}>{combinedProgress}%</span>
-              </div>
-              <div style={{ width: '100%', height: '8px', background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
-                <div style={{ 
-                  width: `${combinedProgress}%`, 
-                  height: '100%', 
-                  background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
-                  borderRadius: '10px',
-                  transition: 'width 1s ease-out'
-                }} />
-              </div>
-            </div>
-          </div>
-
-          {/* ── Stats Cards ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
-            {stats.map((stat, i) => (
-              <div key={i} style={{
-                background: cardBg, border: `1px solid ${border}`,
-                borderRadius: 16, padding: '16px 18px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.08)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <stat.icon size={18} color={stat.color} />
+          {/* ── Featured Courses Section (Top Placement) ── */}
+          {courses.filter(c => c.is_featured).length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Star size={15} color="#f59e0b" fill="#f59e0b" />
                   </div>
-                  <span style={{ fontSize: 11, color: textMuted, fontWeight: 500 }}>{stat.label}</span>
+                  <h3 style={{ fontSize: 17, fontWeight: 800, color: textPrimary, margin: 0 }}>Featured Courses</h3>
                 </div>
-                <p style={{ fontSize: 24, fontWeight: 800, color: textPrimary, margin: '0 0 4px' }}>{stat.value}</p>
-                <p style={{ fontSize: 11, color: stat.color, fontWeight: 600, margin: 0 }}>{stat.sub}</p>
+                <button onClick={() => navigate('/courses')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  See All <ChevronRight size={14} />
+                </button>
               </div>
-            ))}
-          </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                {courses.filter(c => c.is_featured).slice(0, 3).map(course => (
+                  <CourseCard key={course.id} course={course} myCourses={myCourses} navigate={navigate} currencyFormater={currencyFormater} isDarkMode={isDarkMode} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Prominent Live & Upcoming Classes Banner / Section ── */}
           {liveChapters.length > 0 && (
@@ -653,17 +723,8 @@ export default function DashboardScreen() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
                 {liveChapters.map((ch: any) => {
                   const isCurrentlyLive = isChapterLive(ch);
-                  const formattedTime = ch.live_starts_at
-                    ? new Date(ch.live_starts_at).toLocaleString('en-IN', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      })
-                    : 'Scheduled';
-
-                  const courseObj = ch.courses || { id: ch.course_id, title: 'Live Class Course' };
+                  const formattedTime = formatLiveTime(ch.live_starts_at);
+                  const courseObj = ch.courses || ch.course || { id: ch.course_id, title: 'Live Class Course' };
 
                   return (
                     <div
@@ -691,17 +752,18 @@ export default function DashboardScreen() {
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                         {isCurrentlyLive ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ef4444', color: '#fff', padding: '4px 12px', borderRadius: 99, boxShadow: '0 2px 8px rgba(239,68,68,0.4)' }}>
-                            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#fff', display: 'inline-block', animation: 'pulse-live 1.2s infinite' }} />
-                            <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.8px' }}>● LIVE NOW</span>
-                          </div>
+                          <LiveViewerBadge size="sm" isDarkMode={isDarkMode} />
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '3px 10px', borderRadius: 99 }}>
                             <Clock size={12} />
                             <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.5px' }}>UPCOMING</span>
                           </div>
                         )}
-                        <span style={{ fontSize: 11, fontWeight: 600, color: textMuted }}>{formattedTime}</span>
+                        {!isCurrentlyLive && ch.live_starts_at ? (
+                          <LiveCountdown targetDate={ch.live_starts_at} variant="mini" isDarkMode={isDarkMode} onTimeReached={fetchLiveChapters} />
+                        ) : (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: textMuted }}>{formattedTime}</span>
+                        )}
                       </div>
 
                       <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
@@ -771,15 +833,33 @@ export default function DashboardScreen() {
                 {/* Big active course card */}
                 {activeCourse && (() => {
                   const activeLiveChapter = activeCourseChapters.find((ch: any) => isChapterLive(ch));
+
+                  const handleResumeLearning = () => {
+                    if (activeLiveChapter) {
+                      handleDirectJoinLive(activeLiveChapter, activeCourse);
+                    } else if (lastWatchedChapter) {
+                      navigate('/chapterplayer', {
+                        state: {
+                          courseId: activeCourse.id,
+                          chapterId: lastWatchedChapter.id,
+                          lessonId: lastSession?.lessonId,
+                          chapter: {
+                            ...lastWatchedChapter,
+                            video_url: lastWatchedChapter.video_url || (lastWatchedChapter as any).stream_url || (lastWatchedChapter as any).youtube_url || (lastWatchedChapter as any).live_stream_url
+                          },
+                          courseTitle: activeCourse.title,
+                          hasAccess: true,
+                          autoPlay: true
+                        }
+                      });
+                    } else {
+                      navigate('/coursedetails', { state: { course: activeCourse } });
+                    }
+                  };
+
                   return (
                     <div
-                      onClick={() => {
-                        if (activeLiveChapter) {
-                          handleDirectJoinLive(activeLiveChapter, activeCourse);
-                        } else {
-                          navigate('/coursedetails', { state: { course: activeCourse } });
-                        }
-                      }}
+                      onClick={handleResumeLearning}
                       style={{
                         width: 260, flexShrink: 0, borderRadius: 20, overflow: 'hidden',
                         background: cardBg, border: `1px solid ${activeLiveChapter ? '#ef4444' : border}`,
@@ -823,11 +903,16 @@ export default function DashboardScreen() {
                       </div>
                       <div style={{ padding: '14px 14px 16px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
                         <div>
-                          <p style={{ fontSize: 14, fontWeight: 800, color: textPrimary, margin: '0 0 6px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          <p style={{ fontSize: 14, fontWeight: 800, color: textPrimary, margin: '0 0 4px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {activeCourse.title}
                           </p>
-                          <p style={{ fontSize: 12, color: textMuted, margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <BookOpen size={14} /> 
+                          {lastWatchedChapter && (
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <Play size={10} fill="#6366f1" /> Resuming: {lastWatchedChapter.title}
+                            </p>
+                          )}
+                          <p style={{ fontSize: 11, color: textMuted, margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <BookOpen size={13} /> 
                             {progress?.[activeCourse.id]?.length || 0} / {activeCourseChapters.length} lessons completed
                           </p>
                         </div>
@@ -848,7 +933,7 @@ export default function DashboardScreen() {
                           </button>
                         ) : (
                           <button
-                            onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course: activeCourse } }); }}
+                            onClick={e => { e.stopPropagation(); handleResumeLearning(); }}
                             style={{
                               width: '100%', padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer',
                               background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
@@ -984,22 +1069,6 @@ export default function DashboardScreen() {
             </div>
           </div>
 
-          {/* ── Featured Courses (full width in left panel) ── */}
-          {courses.filter(c => c.is_featured).length > 0 && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h3 style={{ fontSize: 17, fontWeight: 800, color: textPrimary, margin: 0 }}>Featured Courses</h3>
-                <button onClick={() => navigate('/courses')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  See All <ChevronRight size={14} />
-                </button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-                {courses.filter(c => c.is_featured).slice(0, 3).map(course => (
-                  <CourseCard key={course.id} course={course} myCourses={myCourses} navigate={navigate} currencyFormater={currencyFormater} isDarkMode={isDarkMode} />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ═══ RIGHT SIDEBAR ═══ */}
@@ -1026,24 +1095,17 @@ export default function DashboardScreen() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {liveChapters.map((ch: any) => {
                   const isCurrentlyLive = isChapterLive(ch);
-                  const formattedTime = ch.live_starts_at
-                    ? new Date(ch.live_starts_at).toLocaleString('en-IN', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      })
-                    : 'Scheduled';
+                  const formattedTime = formatLiveTime(ch.live_starts_at);
+                  const courseObj = ch.courses || ch.course || { id: ch.course_id, title: 'Live Class Course' };
 
                   return (
                     <div
                       key={ch.id}
                       onClick={() => {
                         if (isCurrentlyLive) {
-                          handleDirectJoinLive(ch, ch.courses);
+                          handleDirectJoinLive(ch, courseObj);
                         } else {
-                          navigate('/coursedetails', { state: { course: ch.courses } });
+                          navigate('/coursedetails', { state: { course: courseObj } });
                         }
                       }}
                       style={{
@@ -1067,35 +1129,31 @@ export default function DashboardScreen() {
                       `}</style>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         {isCurrentlyLive ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{
-                              width: 8, height: 8, borderRadius: '50%',
-                              backgroundColor: '#ef4444',
-                              display: 'inline-block',
-                              animation: 'pulse-live 1.5s infinite'
-                            }} />
-                            <span style={{ fontSize: 10, fontWeight: 900, color: '#ef4444', letterSpacing: '0.5px' }}>LIVE NOW</span>
-                          </div>
+                          <LiveViewerBadge size="sm" isDarkMode={isDarkMode} />
                         ) : (
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.5px' }}>UPCOMING</span>
                         )}
-                        <span style={{ fontSize: 10, color: textMuted }}>{formattedTime}</span>
+                        {!isCurrentlyLive && ch.live_starts_at ? (
+                          <LiveCountdown targetDate={ch.live_starts_at} variant="mini" isDarkMode={isDarkMode} onTimeReached={fetchLiveChapters} />
+                        ) : (
+                          <span style={{ fontSize: 10, color: textMuted }}>{formattedTime}</span>
+                        )}
                       </div>
                       
                       <p style={{ fontSize: 12, fontWeight: 700, color: textPrimary, margin: '0 0 2px', lineHeight: 1.4 }}>
                         {ch.title}
                       </p>
                       <p style={{ fontSize: 11, color: textMuted, margin: '0 0 8px' }}>
-                        Course: {ch.courses?.title || 'Course'}
+                        Course: {courseObj?.title || 'Course'}
                       </p>
 
                       <button
                         onClick={e => {
                           e.stopPropagation();
                           if (isCurrentlyLive) {
-                            handleDirectJoinLive(ch, ch.courses);
+                            handleDirectJoinLive(ch, courseObj);
                           } else {
-                            navigate('/coursedetails', { state: { course: ch.courses } });
+                            navigate('/coursedetails', { state: { course: courseObj } });
                           }
                         }}
                         style={{
@@ -1119,6 +1177,50 @@ export default function DashboardScreen() {
               </div>
             </div>
           )}
+
+          {/* ── Stats Cards in Sidebar ── */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: textPrimary, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <TrendingUp size={15} color="#6366f1" />
+                Your Learning Stats
+              </h3>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {stats.map((stat, i) => (
+                <div
+                  key={i}
+                  style={{
+                    background: cardBg,
+                    border: `1px solid ${border}`,
+                    borderRadius: 14,
+                    padding: '12px 14px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    transition: 'transform 0.15s, box-shadow 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.03)';
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 8, background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <stat.icon size={14} color={stat.color} />
+                    </div>
+                    <span style={{ fontSize: 11, color: textMuted, fontWeight: 600, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {stat.label}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: textPrimary, margin: '0 0 2px' }}>{stat.value}</p>
+                  <p style={{ fontSize: 10, color: stat.color, fontWeight: 600, margin: 0 }}>{stat.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* ── Featured Picks Carousel ── */}
           {unpurchasedFeaturedCourses.length > 0 && (
@@ -1354,125 +1456,168 @@ export default function DashboardScreen() {
 function CourseCard({ course, myCourses, navigate, currencyFormater, isDarkMode }: any) {
   const enrolledCourse = myCourses.find((c: any) => c.id === course.id);
   const isEnrolled = !!enrolledCourse;
-  const isExpired = enrolledCourse?.enrollment?.expiry_date
-    ? new Date(enrolledCourse.enrollment.expiry_date) < new Date()
-    : false;
+  
+  const parseSafeDate = (d: any): Date | null => {
+    if (!d) return null;
+    const parsed = new Date(d);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const expiryDate = parseSafeDate(enrolledCourse?.enrollment?.expiry_date);
+  const isExpired = expiryDate ? expiryDate < new Date() : false;
 
   const allChapters = course.chapters || enrolledCourse?.chapters || [];
   const ongoingLiveChapter = allChapters.find((ch: any) => {
     if (ch.is_published === false) return false;
-    const status = (ch.live_status || '').toUpperCase();
+    const status = String(ch.live_status || '').toUpperCase();
     if (status === 'LIVE') return true;
     if (status === 'ENDED' || status === 'RECORDED' || status === 'CONCLUDED') return false;
     if (ch.is_live) {
-      if (ch.live_ends_at && new Date(ch.live_ends_at) <= new Date()) return false;
-      if (ch.live_starts_at && new Date(ch.live_starts_at) <= new Date()) return true;
-      if (!ch.live_starts_at) return true;
+      const endsAt = parseSafeDate(ch.live_ends_at);
+      const startsAt = parseSafeDate(ch.live_starts_at);
+      const now = new Date();
+      if (endsAt && endsAt <= now) return false;
+      if (startsAt && startsAt <= now) return true;
+      if (!startsAt) return true;
     }
     return false;
   });
 
   const upcomingLiveChapter = !ongoingLiveChapter ? allChapters.find((ch: any) => {
     if (ch.is_published === false) return false;
-    const status = (ch.live_status || '').toUpperCase();
+    const status = String(ch.live_status || '').toUpperCase();
     if (status === 'SCHEDULED') return true;
-    if (ch.is_live && ch.live_starts_at && new Date(ch.live_starts_at) > new Date()) return true;
+    const startsAt = parseSafeDate(ch.live_starts_at);
+    if (ch.is_live && startsAt && startsAt > new Date()) return true;
     return false;
   }) : null;
+
+  const formatPrice = (val: any) => {
+    if (typeof currencyFormater === 'function') {
+      try { return currencyFormater(Number(val)); } catch { return val; }
+    }
+    return Number(val)?.toLocaleString?.('en-IN') || String(val);
+  };
 
   return (
     <div
       onClick={() => {
-        if (ongoingLiveChapter && isEnrolled && !isExpired) {
-          navigate('/chapterplayer', {
-            state: {
-              courseId: course.id,
-              chapterId: ongoingLiveChapter.id,
-              chapter: {
-                ...ongoingLiveChapter,
-                video_url: ongoingLiveChapter.video_url || ongoingLiveChapter.stream_url || ongoingLiveChapter.youtube_url || ongoingLiveChapter.live_stream_url
-              },
-              courseTitle: course.title,
-              hasAccess: true,
-              autoPlay: true
-            }
-          });
-        } else {
-          navigate('/coursedetails', { state: { course } });
-        }
+        navigate('/coursedetails', { state: { course } });
       }}
-      className={`flex flex-col rounded-[20px] overflow-hidden shadow-sm border cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+      className={`flex flex-col rounded-[16px] overflow-hidden shadow-sm border cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
     >
-      <div className="h-40 relative">
-        <img src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80'} className="w-full h-full object-cover" alt="" />
-        <div className="absolute top-3 left-3 bg-black/70 px-2 py-0.5 rounded-md">
-          <span className="text-white text-xs font-bold">{course.price ? `₹${currencyFormater(Number(course.price))}` : 'Free'}</span>
+      <div className="h-40 relative group overflow-hidden">
+        <img
+          src={course.thumbnail_url || 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80'}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          alt={course.title}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+
+        {/* Price Tag (Top Left) */}
+        <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-sm px-2 py-0.5 rounded-md border border-white/10">
+          <span className="text-white text-[11px] font-bold">
+            {course.price ? `₹${formatPrice(course.price)}` : 'Free'}
+          </span>
         </div>
 
-        {/* Live / Upcoming Indicator Badges */}
+        {/* Live / Upcoming Indicator Badges (Top Right) */}
         {ongoingLiveChapter ? (
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-red-600 text-white px-2.5 py-1 rounded-full shadow-lg animate-pulse z-10">
-            <span className="w-2 h-2 rounded-full bg-white inline-block animate-ping" />
-            <span className="text-[10px] font-black tracking-wider uppercase">● LIVE NOW</span>
+          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-full shadow-lg animate-pulse z-10">
+            <span className="w-1.5 h-1.5 rounded-full bg-white inline-block animate-ping" />
+            <span className="text-[9px] font-black tracking-wider uppercase">● LIVE</span>
           </div>
         ) : upcomingLiveChapter ? (
-          <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-500/90 text-white px-2 py-0.5 rounded-md shadow z-10">
-            <Clock size={10} />
-            <span className="text-[9px] font-extrabold uppercase">Live Scheduled</span>
+          <div className="absolute top-2.5 right-2.5 flex items-center gap-1 bg-amber-500/90 text-white px-2 py-0.5 rounded-md shadow z-10">
+            <Clock size={9} />
+            <span className="text-[9px] font-bold uppercase">Scheduled</span>
           </div>
         ) : null}
 
+        {/* Enrolled Badge (Bottom Left) */}
         {isEnrolled && (
-          <div className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-md ${isExpired ? 'bg-red-500' : 'bg-green-500'}`}>
+          <div className={`absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-md shadow ${isExpired ? 'bg-red-500' : 'bg-emerald-500'}`}>
             <span className="text-white text-[9px] font-bold">{isExpired ? 'EXPIRED' : 'ENROLLED'}</span>
           </div>
         )}
+
+        {/* Small Action Button Over Thumbnail (Bottom Right) */}
+        <div className="absolute bottom-2.5 right-2.5 z-10">
+          {ongoingLiveChapter && isEnrolled && !isExpired ? (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                navigate('/chapterplayer', {
+                  state: {
+                    courseId: course.id,
+                    chapterId: ongoingLiveChapter.id,
+                    chapter: {
+                      ...ongoingLiveChapter,
+                      video_url: ongoingLiveChapter.video_url || ongoingLiveChapter.stream_url || ongoingLiveChapter.youtube_url || ongoingLiveChapter.live_stream_url
+                    },
+                    courseTitle: course.title,
+                    hasAccess: true,
+                    autoPlay: true
+                  }
+                });
+              }}
+              className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-md border border-white/20 transition-all cursor-pointer"
+            >
+              <Play size={10} fill="#fff" /> Join Live
+            </button>
+          ) : (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                if (isEnrolled && !isExpired) {
+                  const publishedChapters = (allChapters || []).filter((ch: any) => ch.is_published !== false);
+                  const firstChapter = publishedChapters[0];
+                  if (firstChapter) {
+                    navigate('/chapterplayer', {
+                      state: {
+                        courseId: course.id,
+                        chapterId: firstChapter.id,
+                        chapter: {
+                          ...firstChapter,
+                          video_url: firstChapter.video_url || (firstChapter as any).stream_url || (firstChapter as any).youtube_url || (firstChapter as any).live_stream_url
+                        },
+                        courseTitle: course.title,
+                        hasAccess: true,
+                        autoPlay: true
+                      }
+                    });
+                    return;
+                  }
+                }
+                navigate('/coursedetails', { state: { course } });
+              }}
+              className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-md border border-white/20 text-white transition-all cursor-pointer hover:opacity-95 ${
+                isEnrolled
+                  ? (isExpired ? 'bg-red-600' : 'bg-emerald-600')
+                  : 'bg-indigo-600'
+              }`}
+            >
+              <Play size={9} fill="#fff" />
+              {isEnrolled ? (isExpired ? 'Renew' : 'Continue') : (course.price ? 'Buy' : 'Enroll')}
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex flex-col flex-1 p-4 gap-2">
-        <h4 className={`text-sm font-bold leading-5 line-clamp-2 m-0 ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{course.title}</h4>
-        <div className="flex items-center gap-1 mt-1">
-          <Star size={13} className="text-amber-500" fill="#f59e0b" style={{ color: '#f59e0b' }} />
-          <span className="text-xs font-bold text-amber-500">
+
+      {/* Card Info - Clean Title & Rating without description or bottom button */}
+      <div className="p-3 flex flex-col gap-1.5">
+        <h4 className={`text-xs font-bold leading-snug line-clamp-2 m-0 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          {course.title}
+        </h4>
+        <div className="flex items-center gap-1">
+          <Star size={12} className="text-amber-500" fill="#f59e0b" style={{ color: '#f59e0b' }} />
+          <span className="text-[11px] font-bold text-amber-500">
             {course.rating ? course.rating.toFixed(1) : '4.5'}
           </span>
-          <span className={`text-[10px] ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <span className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             ({course.reviewsCount || 0} reviews)
           </span>
         </div>
-        <p className={`text-xs line-clamp-2 m-0 flex-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-          {course.description ? stripMarkdown(course.description).slice(0, 100) : ''}
-        </p>
-
-        {ongoingLiveChapter && isEnrolled && !isExpired ? (
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              navigate('/chapterplayer', {
-                state: {
-                  courseId: course.id,
-                  chapterId: ongoingLiveChapter.id,
-                  chapter: {
-                    ...ongoingLiveChapter,
-                    video_url: ongoingLiveChapter.video_url || ongoingLiveChapter.stream_url || ongoingLiveChapter.youtube_url || ongoingLiveChapter.live_stream_url
-                  },
-                  courseTitle: course.title,
-                  hasAccess: true,
-                  autoPlay: true
-                }
-              });
-            }}
-            className="w-full py-2.5 rounded-xl border-none font-black text-xs text-white bg-red-600 hover:bg-red-700 cursor-pointer transition-all shadow-md flex items-center justify-center gap-1.5"
-          >
-            <Play size={13} fill="#fff" /> Join Live Class Now
-          </button>
-        ) : (
-          <button
-            onClick={e => { e.stopPropagation(); navigate('/coursedetails', { state: { course } }); }}
-            className={`w-full py-2.5 rounded-xl border-none font-bold text-xs text-white cursor-pointer transition-opacity hover:opacity-90 ${isEnrolled ? (isExpired ? 'bg-red-500' : 'bg-green-500') : 'bg-primary'}`}
-          >
-            {isEnrolled ? (isExpired ? 'Renew Access' : 'Continue Learning') : (course.price ? 'Buy Now' : 'Enroll Now')}
-          </button>
-        )}
       </div>
     </div>
   );

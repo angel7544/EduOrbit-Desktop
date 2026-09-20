@@ -60,7 +60,7 @@ export default function MainScreen() {
         style={{ marginLeft: `${sidebarWidth}px` }} 
         className="flex-1 overflow-y-auto h-screen bg-background"
       >
-        <div className="max-w-7xl mx-auto w-full min-h-screen">
+        <div className="w-full min-h-screen">
           <Outlet />
         </div>
       </div>

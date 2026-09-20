@@ -168,9 +168,9 @@ export const Sidebar = () => {
       <div
         onMouseDown={handleMouseDown}
         onTouchStart={handleMouseDown}
-        className="absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize z-50 transition-colors duration-150 hover:bg-primary/30 active:bg-primary/60 group flex items-center justify-center"
+        className="absolute top-0 -right-[4px] bottom-0 w-2 cursor-col-resize z-50 transition-colors duration-150 hover:bg-primary/30 active:bg-primary/60 group flex items-center justify-center"
       >
-        <div className="w-[2px] h-8 bg-gray-400/30 group-hover:bg-primary/60 rounded-full transition-colors duration-150" />
+        <div className="w-[3px] h-8 bg-gray-300 dark:bg-gray-600 group-hover:bg-primary rounded-full transition-colors duration-150" />
       </div>
     </div>
   );

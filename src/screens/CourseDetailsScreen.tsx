@@ -11,6 +11,7 @@ import { formatDuration, currencyFormater, renderMarkdownAndHTML } from '../lib/
 import { Header } from '../components/Header';
 import { useTheme } from '../hooks/useTheme';
 import { supabase } from '../lib/supabase';
+import { LiveCountdown, LiveViewerBadge } from '../components/LiveCountdown';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 
@@ -895,10 +896,7 @@ export default function CourseDetailsScreen() {
                                                         <div className="flex-1">
                                                             <div className="flex items-center gap-2 mb-2">
                                                                 {isLive && (
-                                                                    <span className="flex items-center gap-1.5 bg-red-600 text-white text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full animate-pulse shadow-sm shadow-red-500/40">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                                                                        🔴 LIVE NOW
-                                                                    </span>
+                                                                    <LiveViewerBadge size="sm" isDarkMode={isDarkMode} />
                                                                 )}
                                                                 {isRecorded && (
                                                                     <span className="flex items-center gap-1 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
@@ -907,9 +905,7 @@ export default function CourseDetailsScreen() {
                                                                     </span>
                                                                 )}
                                                                 {isScheduled && (
-                                                                    <span className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-                                                                        ⏰ Live Scheduled
-                                                                    </span>
+                                                                    <LiveCountdown targetDate={chapter.live_starts_at} variant="badge" isDarkMode={isDarkMode} />
                                                                 )}
                                                             </div>
                                                             <h4 className={`text-sm font-extrabold ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{chapter.title}</h4>
@@ -926,7 +922,7 @@ export default function CourseDetailsScreen() {
                                                             </div>
                                                         </div>
 
-                                                        {/* Action Buttons: Only show Join when LIVE. If recorded & has video, show Watch Recording. If no live, hide Join! */}
+                                                        {/* Action Buttons: Join when LIVE, Watch Recording when recorded, Enter Live Session when scheduled */}
                                                         {isLive ? (
                                                             <button
                                                                 onClick={() => {
@@ -995,10 +991,36 @@ export default function CourseDetailsScreen() {
                                                                 Session Concluded
                                                             </div>
                                                         ) : isScheduled ? (
-                                                            <div className="px-4 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20 flex items-center gap-1.5 flex-shrink-0">
-                                                                <Clock size={13} />
-                                                                Live Soon
-                                                            </div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (!user) {
+                                                                        alert('Please log in to enter the live session.');
+                                                                        return;
+                                                                    }
+                                                                    if (!isEnrolled) {
+                                                                        handleEnrollOrPlay();
+                                                                        return;
+                                                                    }
+                                                                    if (isExpired) {
+                                                                        alert('Your course access has expired. Please renew your enrollment.');
+                                                                        return;
+                                                                    }
+                                                                    navigate('/chapterplayer', {
+                                                                        state: {
+                                                                            courseId: course.id,
+                                                                            chapterId: chapter.id,
+                                                                            chapter: chapter,
+                                                                            courseTitle: course.title,
+                                                                            hasAccess: true,
+                                                                            autoPlay: true
+                                                                        }
+                                                                    });
+                                                                }}
+                                                                className="px-5 py-3 rounded-xl font-extrabold text-xs uppercase tracking-wider text-center border-none transition-all duration-300 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white cursor-pointer shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 flex-shrink-0"
+                                                            >
+                                                                <Play size={14} fill="#fff" />
+                                                                🔥 Live Soon • Enter Live Session
+                                                            </button>
                                                         ) : null}
                                                     </div>
                                                 </div>
