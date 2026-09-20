@@ -107,15 +107,6 @@ export default function DashboardScreen() {
     }
   }, [unpurchasedFeaturedCourses.length, currentSlide]);
 
-  // Auto-slide featured courses
-  useEffect(() => {
-    if (unpurchasedFeaturedCourses.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % unpurchasedFeaturedCourses.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [unpurchasedFeaturedCourses.length]);
-
   useEffect(() => {
     if (user && myCourses.length > 0) {
       myCourses.forEach(course => { if (loadProgress) loadProgress(course.id, user.id); });
@@ -404,6 +395,28 @@ export default function DashboardScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
+  // Continue learning — prioritize most recently watched course session
+  const lastSession = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('eduorbit_last_accessed_session');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const continueLearning = useMemo(() => {
+    if (!myCourses.length) return [];
+    if (lastSession?.courseId) {
+      const matched = myCourses.find(c => c.id === lastSession.courseId);
+      if (matched) {
+        const others = myCourses.filter(c => c.id !== lastSession.courseId);
+        return [matched, ...others].slice(0, 4);
+      }
+    }
+    return myCourses.slice(0, 4);
+  }, [myCourses, lastSession]);
+
   const getGreeting = () => {
     const h = new Date().getHours();
     if (h < 12) return 'Good Morning';
@@ -420,6 +433,41 @@ export default function DashboardScreen() {
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.floor(hrs / 24)}d ago`;
   };
+
+  // ─── Theme tokens ────────────────────────────────────────────
+  const bg = isDarkMode ? '#0f172a' : '#f1f5f9';
+  const cardBg = isDarkMode ? '#1e293b' : '#ffffff';
+  const border = isDarkMode ? '#334155' : '#e2e8f0';
+  const textPrimary = isDarkMode ? '#f1f5f9' : '#0f172a';
+  const textMuted = isDarkMode ? '#94a3b8' : '#64748b';
+
+  // Stats
+  const watchTimeDisplay = analyticsData ? formatWatchTime(analyticsData.total_watch_time) : '0h';
+  const certCount = analyticsData?.course_progress?.filter((c: any) => c.has_certificate).length || 0;
+  const enrolledCount = myCourses.length;
+  const completedCourses = analyticsData?.course_progress?.filter((c: any) => c.completion_percentage === 100).length || 0;
+
+  const stats = [
+    { label: 'Enrolled Courses', value: enrolledCount, icon: BookOpen, color: '#6366f1', bg: 'rgba(99,102,241,0.1)', sub: `+${Math.min(enrolledCount, 2)} this month` },
+    { label: 'Completed', value: completedCourses, icon: CheckCircle2, color: '#10b981', bg: 'rgba(16,185,129,0.1)', sub: '+1 this month' },
+    { label: 'Certificates', value: certCount, icon: Award, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', sub: 'View all' },
+    { label: 'Learning Hours', value: watchTimeDisplay, icon: Clock, color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', sub: '+6h this week' },
+  ];
+
+  const activeCourse = continueLearning[0];
+  const activeCourseChapters = activeCourse?.chapters?.filter((ch: any) => ch.is_published !== false) || [];
+  const lastWatchedChapter = activeCourse
+    ? (activeCourseChapters.find((ch: any) => ch.id === lastSession?.chapterId) || activeCourseChapters[0])
+    : null;
+
+  const activeProgress = activeCourse
+    ? (activeCourseChapters.length ? Math.round(((progress?.[activeCourse.id]?.length || 0) / activeCourseChapters.length) * 100) : 0)
+    : 0;
+
+  // Calculate combined course progress
+  const totalChapters = myCourses.reduce((sum, c) => sum + (c.chapters?.filter((ch: any) => ch.is_published !== false).length || 0), 0);
+  const completedChapters = myCourses.reduce((sum, c) => sum + (progress?.[c.id]?.length || 0), 0);
+  const combinedProgress = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
   if ((isInitialLoading && !courses.length && !myCourses.length) || (loadingError && !courses.length && !myCourses.length)) {
     return <AppLoader isLoading={isInitialLoading} error={loadingError} onRetry={initDashboard} />;
@@ -449,7 +497,7 @@ export default function DashboardScreen() {
           <h3 className="text-base font-bold text-text mb-4">Search Results ({results.length})</h3>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
             {results.map(course => (
-              <CourseCard key={course.id} course={course} myCourses={myCourses} navigate={navigate} currencyFormater={currencyFormater} />
+              <CourseCard key={course.id} course={course} myCourses={myCourses} navigate={navigate} currencyFormater={currencyFormater} isDarkMode={isDarkMode} />
             ))}
           </div>
           {results.length === 0 && (
@@ -462,65 +510,6 @@ export default function DashboardScreen() {
       </div>
     );
   }
-
-  // ─── Theme tokens ────────────────────────────────────────────
-  const bg = isDarkMode ? '#0f172a' : '#f1f5f9';
-  const cardBg = isDarkMode ? '#1e293b' : '#ffffff';
-  const border = isDarkMode ? '#334155' : '#e2e8f0';
-  const textPrimary = isDarkMode ? '#f1f5f9' : '#0f172a';
-  const textMuted = isDarkMode ? '#94a3b8' : '#64748b';
-
-  // Stats
-  const watchTimeDisplay = analyticsData ? formatWatchTime(analyticsData.total_watch_time) : '0h';
-  const certCount = analyticsData?.course_progress?.filter((c: any) => c.has_certificate).length || 0;
-  const enrolledCount = myCourses.length;
-  const completedCourses = analyticsData?.course_progress?.filter((c: any) => c.completion_percentage === 100).length || 0;
-
-  const stats = [
-    { label: 'Enrolled Courses', value: enrolledCount, icon: BookOpen, color: '#6366f1', bg: 'rgba(99,102,241,0.1)', sub: `+${Math.min(enrolledCount, 2)} this month` },
-    { label: 'Completed', value: completedCourses, icon: CheckCircle2, color: '#10b981', bg: 'rgba(16,185,129,0.1)', sub: '+1 this month' },
-    { label: 'Certificates', value: certCount, icon: Award, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', sub: 'View all' },
-    { label: 'Learning Hours', value: watchTimeDisplay, icon: Clock, color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', sub: '+6h this week' },
-  ];
-
-
-
-  // Continue learning — prioritize most recently watched course session
-  const lastSession = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('eduorbit_last_accessed_session');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const continueLearning = useMemo(() => {
-    if (!myCourses.length) return [];
-    if (lastSession?.courseId) {
-      const matched = myCourses.find(c => c.id === lastSession.courseId);
-      if (matched) {
-        const others = myCourses.filter(c => c.id !== lastSession.courseId);
-        return [matched, ...others].slice(0, 4);
-      }
-    }
-    return myCourses.slice(0, 4);
-  }, [myCourses, lastSession]);
-
-  const activeCourse = continueLearning[0];
-  const activeCourseChapters = activeCourse?.chapters?.filter((ch: any) => ch.is_published !== false) || [];
-  const lastWatchedChapter = activeCourse
-    ? (activeCourseChapters.find((ch: any) => ch.id === lastSession?.chapterId) || activeCourseChapters[0])
-    : null;
-
-  const activeProgress = activeCourse
-    ? (activeCourseChapters.length ? Math.round(((progress?.[activeCourse.id]?.length || 0) / activeCourseChapters.length) * 100) : 0)
-    : 0;
-
-  // Calculate combined course progress
-  const totalChapters = myCourses.reduce((sum, c) => sum + (c.chapters?.filter((ch: any) => ch.is_published !== false).length || 0), 0);
-  const completedChapters = myCourses.reduce((sum, c) => sum + (progress[c.id]?.length || 0), 0);
-  const combinedProgress = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
   return (
     <div style={{ minHeight: '100vh', background: bg }}>

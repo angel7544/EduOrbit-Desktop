@@ -3,7 +3,8 @@ import Hls from 'hls.js';
 import {
   Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX,
   Maximize, Minimize, Settings, SkipBack, SkipForward,
-  CheckCircle2, Radio, AlertCircle, Loader2, PictureInPicture2
+  CheckCircle2, Radio, AlertCircle, Loader2, PictureInPicture2,
+  BookOpen
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -735,12 +736,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   if (!normalizedUrl) {
     return (
-      <div className="relative w-full aspect-video bg-neutral-900 rounded-2xl flex flex-col items-center justify-center p-6 text-center border border-white/5 select-none">
-        <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
-          <AlertCircle size={28} className="text-primary" />
+      <div className="relative w-full max-w-full max-h-full aspect-video bg-gradient-to-br from-indigo-950/40 via-neutral-900 to-slate-900 rounded-2xl flex flex-col items-center justify-center p-8 text-center border border-indigo-500/20 select-none shadow-2xl">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center mb-4 shadow-lg">
+          <BookOpen size={30} className="text-indigo-400" />
         </div>
-        <h4 className="text-white text-sm sm:text-base font-bold mb-1">No Video Available</h4>
-        <p className="text-white/60 text-xs max-w-sm">This lesson or chapter currently has no video stream URL configured.</p>
+        <h4 className="text-white text-base sm:text-lg font-extrabold mb-1.5 tracking-tight">Study & Assessment Module</h4>
+        <p className="text-white/65 text-xs sm:text-sm max-w-md leading-relaxed">This section is focused on reading material, reference resources, assignments, and test assessments.</p>
       </div>
     );
   }

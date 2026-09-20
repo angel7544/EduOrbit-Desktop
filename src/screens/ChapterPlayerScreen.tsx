@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Lock,
   Play, Share2, BookOpen, Clock, CheckCheck, FileText, PanelLeftClose, PanelLeftOpen,
-  Info, Layers, Download
+  Info, Layers, Download, GraduationCap, Eye, Award, Sparkles
 } from 'lucide-react';
 import { ChapterItem, useCourseStore } from '../store/courseStore';
 import { useAuthStore } from '../store/authStore';
@@ -239,10 +239,21 @@ export default function ChapterPlayerScreen() {
           if (!prev) return prev;
           const match = updated.find((c: any) => c.id === prev.id);
           if (!match) return prev;
+          const newUrl = match.video_url || match.stream_url || match.youtube_url || match.live_stream_url;
+          if (
+            prev.video_url === newUrl &&
+            prev.title === match.title &&
+            prev.live_status === match.live_status &&
+            prev.is_live === match.is_live &&
+            prev.live_starts_at === match.live_starts_at &&
+            prev.live_ends_at === match.live_ends_at
+          ) {
+            return prev;
+          }
           return {
             ...prev,
             ...match,
-            video_url: match.video_url || match.stream_url || match.youtube_url || match.live_stream_url
+            video_url: newUrl
           };
         });
       }
@@ -269,11 +280,6 @@ export default function ChapterPlayerScreen() {
       })
       .subscribe();
 
-    // Heartbeat: 15-second timer to ensure live countdowns and live stream transitions update automatically
-    const heartbeat = setInterval(() => {
-      refreshCourseChapters();
-    }, 15000);
-
     // Refresh when user focuses the window
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -284,7 +290,6 @@ export default function ChapterPlayerScreen() {
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(heartbeat);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [courseId, currentCourse?.id, refreshCourseChapters]);
@@ -369,6 +374,14 @@ export default function ChapterPlayerScreen() {
   const hasDetails = useMemo(() => {
     return !!(currentDescription.trim() || currentCourse?.description?.trim() || hasAttachments);
   }, [currentDescription, currentCourse?.description, hasAttachments]);
+
+  const activeVideoUrl = useMemo(() => {
+    return (currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.video_url : currentChapter?.video_url) || (currentChapter as any)?.stream_url || (currentChapter as any)?.youtube_url || (currentChapter as any)?.live_stream_url || '';
+  }, [currentLessonId, playableItems, currentChapter]);
+
+  const isCurrentUpcoming = useMemo(() => {
+    return isChapterUpcoming(currentChapter) && !forceEnterLive;
+  }, [currentChapter, forceEnterLive]);
 
   const navigateToItem = (item: any) => {
     const ch = item.chapter || item.parentChapter;
@@ -755,43 +768,436 @@ export default function ChapterPlayerScreen() {
           </div>
         </div>
 
-        {/* Right: Video + Info */}
+        {/* Right: Video + Info / Dedicated Assessment Hub */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', position: 'relative' }}>
+          {!activeVideoUrl && !isCurrentUpcoming ? (
+            /* ══════════════════════════════════════════════════════════════════
+               DEDICATED LMS ASSESSMENT & RESOURCE WORKSPACE
+               ══════════════════════════════════════════════════════════════════ */
+            (() => {
+              const activeTitle = (currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title : currentChapter?.title) || 'Assessment & Study Module';
+              const activeDesc = (currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description : currentChapter?.description) || currentChapter?.description || '';
+              const attachments = currentChapter?.attachments || [];
+              const lowerTitle = activeTitle.toLowerCase();
+              const isQuizOrTest = lowerTitle.includes('quiz') || lowerTitle.includes('test') || lowerTitle.includes('exam') || lowerTitle.includes('mock') || lowerTitle.includes('assessment') || lowerTitle.includes('mcq') || lowerTitle.includes('practice');
+              const hasPdfsOrAttachments = attachments.length > 0 || lowerTitle.includes('pdf') || lowerTitle.includes('notes') || lowerTitle.includes('resource') || lowerTitle.includes('document') || lowerTitle.includes('material');
+              const currentChapterIdx = sortedChapters.findIndex((c: any) => c.id === currentChapter?.id);
 
-          {/* Floating Expand Sidebar Button when collapsed */}
-          {sidebarCollapsed && (
-            <button
-              onClick={() => setSidebarCollapsed(false)}
-              style={{
-                position: 'absolute', top: 12, left: 12, zIndex: 40,
-                background: isDarkMode ? 'rgba(15,23,42,0.92)' : 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(10px)',
-                color: textPrimary,
-                border: `1.5px solid ${isDarkMode ? 'rgba(99,102,241,0.4)' : border}`,
-                boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
-                borderRadius: 10, padding: '7px 13px',
-                display: 'flex', alignItems: 'center', gap: 6,
-                cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                transition: 'all 0.15s'
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
-              title="Expand playlist"
-            >
-              <PanelLeftOpen size={16} color="#6366f1" />
-              <span>Playlist</span>
-            </button>
-          )}
-
-          {/* Video Player or Scheduled Live Waiting Screen */}
-          {(() => {
-            const activeVideoUrl = (currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.video_url : currentChapter?.video_url) || (currentChapter as any)?.stream_url || (currentChapter as any)?.youtube_url || (currentChapter as any)?.live_stream_url || '';
-            const isCurrentUpcoming = isChapterUpcoming(currentChapter) && !forceEnterLive;
-            const startsAt = parseSafeDate(currentChapter?.live_starts_at);
-
-            // CRITICAL: Even if a video link exists, if the class is scheduled for the future, DO NOT start live prematurely unless user requests early entry!
-            if (isCurrentUpcoming) {
               return (
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  background: isDarkMode ? '#0b0f19' : '#f8fafc',
+                  minHeight: '100%',
+                  overflowY: 'auto'
+                }}>
+                  {/* Top Bar: Navigation, Breadcrumb & Completion */}
+                  <div style={{
+                    padding: '14px 28px',
+                    background: isDarkMode ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(12px)',
+                    borderBottom: `1px solid ${border}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 16,
+                    flexWrap: 'wrap',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 20
+                  }}>
+                    {/* Left: Playlist Toggle & Breadcrumb */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flexWrap: 'wrap' }}>
+                      {sidebarCollapsed && (
+                        <button
+                          onClick={() => setSidebarCollapsed(false)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            border: `1.5px solid ${isDarkMode ? 'rgba(99,102,241,0.5)' : '#6366f1'}`,
+                            background: isDarkMode ? 'rgba(99,102,241,0.22)' : 'rgba(99,102,241,0.12)',
+                            color: isDarkMode ? '#f1f5f9' : '#4338ca',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: 12,
+                            fontWeight: 800,
+                            transition: 'all 0.15s'
+                          }}
+                          title="Open Playlist"
+                        >
+                          <PanelLeftOpen size={14} color="#6366f1" />
+                          <span>Playlist</span>
+                        </button>
+                      )}
+
+                      {/* Module Badge */}
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        background: isQuizOrTest 
+                          ? (isDarkMode ? 'rgba(245,158,11,0.18)' : 'rgba(245,158,11,0.2)')
+                          : hasPdfsOrAttachments
+                            ? (isDarkMode ? 'rgba(16,185,129,0.18)' : 'rgba(16,185,129,0.2)')
+                            : (isDarkMode ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.2)'),
+                        border: `1px solid ${isQuizOrTest ? 'rgba(245,158,11,0.45)' : hasPdfsOrAttachments ? 'rgba(16,185,129,0.45)' : 'rgba(99,102,241,0.45)'}`,
+                        padding: '4px 12px', borderRadius: 99,
+                        color: isQuizOrTest ? (isDarkMode ? '#fbbf24' : '#d97706') : hasPdfsOrAttachments ? '#10b981' : '#6366f1',
+                        fontSize: 11, fontWeight: 900, letterSpacing: '0.6px'
+                      }}>
+                        {isQuizOrTest ? <GraduationCap size={13} /> : hasPdfsOrAttachments ? <FileText size={13} /> : <BookOpen size={13} />}
+                        <span>{isQuizOrTest ? 'ASSESSMENT & QUIZ MODULE' : hasPdfsOrAttachments ? 'RESOURCE & STUDY MATERIAL' : 'CONCEPT MODULE'}</span>
+                      </div>
+
+                      {/* Chapter Breadcrumb */}
+                      <span style={{ fontSize: 13, color: textMuted, fontWeight: 600 }}>
+                        {currentChapterIdx >= 0 ? `Chapter ${currentChapterIdx + 1} of ${sortedChapters.length}` : ''}
+                      </span>
+                    </div>
+
+                    {/* Right: Progress & Action Controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      {/* Course Progress Pill */}
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '6px 12px', borderRadius: 8,
+                        background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                        border: `1px solid ${border}`
+                      }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
+                        <span style={{ fontSize: 11, color: textMuted }}>({completedCount}/{totalCount} done)</span>
+                      </div>
+
+                      {/* Prev Button */}
+                      {prevItem && (
+                        <button
+                          onClick={() => navigateToItem(prevItem)}
+                          style={{
+                            padding: '7px 14px', borderRadius: 9,
+                            border: `1px solid ${border}`,
+                            background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#ffffff',
+                            color: textPrimary, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            transition: 'background 0.15s'
+                          }}
+                        >
+                          <ChevronLeft size={14} /> Prev
+                        </button>
+                      )}
+
+                      {/* Mark Completed Button */}
+                      {hasAccess && (
+                        <button
+                          onClick={isCompleted ? handleUnmarkComplete : handleMarkComplete}
+                          disabled={markingComplete}
+                          style={{
+                            padding: '7px 16px', borderRadius: 9, cursor: 'pointer',
+                            background: isCompleted ? 'rgba(16,185,129,0.16)' : 'linear-gradient(135deg, #10b981, #059669)',
+                            border: isCompleted ? '1.5px solid rgba(16,185,129,0.5)' : 'none',
+                            color: isCompleted ? '#10b981' : '#ffffff',
+                            fontSize: 12, fontWeight: 800,
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            boxShadow: isCompleted ? 'none' : '0 3px 12px rgba(16,185,129,0.3)',
+                            transition: 'all 0.15s'
+                          }}
+                        >
+                          <CheckCircle2 size={14} />
+                          <span>{isCompleted ? 'Completed ✓' : 'Mark as Completed'}</span>
+                        </button>
+                      )}
+
+                      {/* Next Button */}
+                      {nextItem && (
+                        <button
+                          onClick={() => navigateToItem(nextItem)}
+                          style={{
+                            padding: '7px 16px', borderRadius: 9, border: 'none',
+                            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                            color: '#ffffff', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            boxShadow: '0 3px 12px rgba(99,102,241,0.3)',
+                            transition: 'all 0.15s'
+                          }}
+                        >
+                          <span>Next</span> <ChevronRight size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Hero Container */}
+                  <div style={{ maxWidth: 1180, width: '100%', margin: '0 auto', padding: '28px 28px 60px', boxSizing: 'border-box' }}>
+                    {/* Header Banner */}
+                    <div style={{
+                      borderRadius: 20,
+                      padding: '28px 32px',
+                      background: isDarkMode
+                        ? 'linear-gradient(135deg, rgba(30,27,75,0.65) 0%, rgba(15,23,42,0.85) 100%)'
+                        : 'linear-gradient(135deg, rgba(238,242,255,0.85) 0%, rgba(248,250,252,0.95) 100%)',
+                      border: `1.5px solid ${isDarkMode ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'}`,
+                      boxShadow: isDarkMode ? '0 12px 36px rgba(0,0,0,0.35)' : '0 12px 36px rgba(99,102,241,0.07)',
+                      marginBottom: 28,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 16
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+                        <div style={{ maxWidth: 680 }}>
+                          <h1 style={{
+                            fontSize: 28, fontWeight: 900, color: textPrimary,
+                            margin: '0 0 8px', lineHeight: 1.2, letterSpacing: '-0.4px'
+                          }}>
+                            {activeTitle}
+                          </h1>
+                          <p style={{ fontSize: 13.5, color: textMuted, margin: 0, lineHeight: 1.6 }}>
+                            {isQuizOrTest
+                              ? 'Practice questions, mock tests, and assignments designed to test your knowledge. Open each assessment directly in the interactive viewer or download for offline study.'
+                              : hasPdfsOrAttachments
+                                ? 'Download and review the attached PDF documents, reference sheets, and study materials for this chapter.'
+                                : 'Review the comprehensive lesson theory, notes, and syllabus concepts below.'}
+                          </p>
+                        </div>
+
+                        {/* Quick Stats Badges */}
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          <div style={{
+                            padding: '10px 18px', borderRadius: 14,
+                            background: isDarkMode ? 'rgba(255,255,255,0.05)' : '#ffffff',
+                            border: `1px solid ${border}`,
+                            textAlign: 'center', minWidth: 100
+                          }}>
+                            <div style={{ fontSize: 20, fontWeight: 900, color: '#6366f1' }}>
+                              {attachments.length}
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              {isQuizOrTest ? 'Quizzes' : 'Documents'}
+                            </div>
+                          </div>
+
+                          <div style={{
+                            padding: '10px 18px', borderRadius: 14,
+                            background: isDarkMode ? 'rgba(255,255,255,0.05)' : '#ffffff',
+                            border: `1px solid ${border}`,
+                            textAlign: 'center', minWidth: 100
+                          }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: isCompleted ? '#10b981' : '#f59e0b', marginTop: 4 }}>
+                              {isCompleted ? 'Completed' : 'In Progress'}
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              Status
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section Header: Quizzes / Resources */}
+                    {attachments.length > 0 && (
+                      <div style={{ marginBottom: 28 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 4, height: 20, borderRadius: 2, background: 'linear-gradient(to bottom, #6366f1, #8b5cf6)' }} />
+                            <h2 style={{ fontSize: 17, fontWeight: 800, color: textPrimary, margin: 0 }}>
+                              {isQuizOrTest ? 'Available Practice Tests & Quizzes' : 'Attached Study Materials & Documents'}
+                            </h2>
+                            <span style={{
+                              fontSize: 11, fontWeight: 800,
+                              background: isDarkMode ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.1)',
+                              color: '#6366f1', padding: '2px 9px', borderRadius: 99
+                            }}>
+                              {attachments.length} {attachments.length === 1 ? 'item' : 'items'}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 12, color: textMuted }}>
+                            Click View to solve online or Download to save
+                          </span>
+                        </div>
+
+                        {/* 2-Column Responsive Card Grid */}
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+                          gap: 16
+                        }}>
+                          {attachments.map((att: any, idx: number) => {
+                            const isQuizItem = isQuizOrTest || att.title?.toLowerCase().includes('quiz') || att.title?.toLowerCase().includes('test');
+                            return (
+                              <div
+                                key={att.id || idx}
+                                className="edu-quiz-card"
+                                style={{
+                                  position: 'relative',
+                                  borderRadius: 16,
+                                  padding: '20px',
+                                  background: isDarkMode ? 'rgba(30, 41, 59, 0.65)' : '#ffffff',
+                                  border: `1.5px solid ${isDarkMode ? 'rgba(99, 102, 241, 0.25)' : 'rgba(226, 232, 240, 0.9)'}`,
+                                  boxShadow: isDarkMode ? '0 6px 20px rgba(0,0,0,0.2)' : '0 6px 20px rgba(99,102,241,0.05)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'space-between',
+                                  gap: 16
+                                }}
+                              >
+                                <div>
+                                  {/* Top Row: Index Badge + Format Pill */}
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 900, letterSpacing: '0.8px',
+                                      color: isQuizItem ? '#f59e0b' : '#6366f1',
+                                      background: isQuizItem ? 'rgba(245,158,11,0.14)' : 'rgba(99,102,241,0.12)',
+                                      padding: '3px 10px', borderRadius: 6
+                                    }}>
+                                      {isQuizItem ? `QUIZ 0${idx + 1}` : `SET #${idx + 1}`}
+                                    </span>
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 700, color: textMuted,
+                                      background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                                      padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.5px'
+                                    }}>
+                                      {att.file_type || 'PDF Document'}
+                                    </span>
+                                  </div>
+
+                                  {/* Item Details */}
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                                    <div style={{
+                                      width: 42, height: 42, borderRadius: 12,
+                                      background: isQuizItem ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.15)',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                                    }}>
+                                      {isQuizItem ? (
+                                        <Award size={20} color="#f59e0b" />
+                                      ) : (
+                                        <FileText size={20} color="#6366f1" />
+                                      )}
+                                    </div>
+                                    <div style={{ minWidth: 0 }}>
+                                      <h3 style={{
+                                        fontSize: 15, fontWeight: 800, color: textPrimary,
+                                        margin: '0 0 4px', lineHeight: 1.3
+                                      }}>
+                                        {att.title}
+                                      </h3>
+                                      <p style={{ fontSize: 12, color: textMuted, margin: 0, lineHeight: 1.4 }}>
+                                        {isQuizItem
+                                          ? 'Practice assessment sheet with question sets & self-check keys.'
+                                          : 'Study resource document and curriculum reference notes.'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                  <button
+                                    onClick={() => navigate('/attachmentviewer', { state: { url: att.file_url, title: att.title, type: att.file_type } })}
+                                    className="edu-btn-glow"
+                                    style={{
+                                      flex: 1,
+                                      padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                                      background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                                      color: '#ffffff', fontSize: 12.5, fontWeight: 800,
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                      boxShadow: '0 3px 12px rgba(99,102,241,0.3)'
+                                    }}
+                                  >
+                                    <Eye size={14} />
+                                    <span>View & Solve</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => window.open(att.file_url, '_blank')}
+                                    style={{
+                                      padding: '9px 14px', borderRadius: 10,
+                                      border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.12)' : border}`,
+                                      background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f8fafc',
+                                      color: textPrimary, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                                      transition: 'background 0.15s'
+                                    }}
+                                    title="Download PDF"
+                                  >
+                                    <Download size={14} />
+                                    <span>Download</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Lesson Description & Theory Notes (if present) */}
+                    {activeDesc.trim() && (
+                      <div style={{
+                        marginTop: 32,
+                        borderRadius: 18,
+                        padding: '24px 28px',
+                        background: isDarkMode ? 'rgba(30, 41, 59, 0.5)' : '#ffffff',
+                        border: `1px solid ${border}`,
+                        boxShadow: isDarkMode ? '0 8px 24px rgba(0,0,0,0.2)' : '0 8px 24px rgba(0,0,0,0.04)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                          <BookOpen size={17} color="#6366f1" />
+                          <h3 style={{ fontSize: 16, fontWeight: 800, color: textPrimary, margin: 0 }}>
+                            Instructions & Lesson Notes
+                          </h3>
+                        </div>
+                        <div style={{ fontSize: 13.5, color: textPrimary, lineHeight: 1.8 }}>
+                          <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                            {activeDesc}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Empty state if neither attachments nor description */}
+                    {attachments.length === 0 && !activeDesc.trim() && (
+                      <div style={{
+                        padding: '60px 24px', textAlign: 'center',
+                        background: isDarkMode ? 'rgba(30,41,59,0.4)' : '#ffffff',
+                        borderRadius: 18, border: `1px solid ${border}`
+                      }}>
+                        <div style={{
+                          width: 50, height: 50, borderRadius: 14, background: 'rgba(99,102,241,0.12)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+                        }}>
+                          <BookOpen size={26} color="#6366f1" />
+                        </div>
+                        <h3 style={{ fontSize: 17, fontWeight: 800, color: textPrimary, margin: '0 0 8px' }}>
+                          No Documents or Media
+                        </h3>
+                        <p style={{ fontSize: 13.5, color: textMuted, margin: '0 0 20px', maxWidth: 400, marginInline: 'auto' }}>
+                          This lesson does not have attached files or notes. You can mark it completed and continue to the next lesson.
+                        </p>
+                        {nextItem && (
+                          <button
+                            onClick={() => navigateToItem(nextItem)}
+                            style={{
+                              padding: '10px 20px', borderRadius: 10, border: 'none',
+                              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                              color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: 6
+                            }}
+                          >
+                            <span>Go to Next Lesson</span> <ChevronRight size={15} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            /* ══════════════════════════════════════════════════════════════════
+               VIDEO PLAYER & LIVE STREAM BROADCAST MODE
+               ══════════════════════════════════════════════════════════════════ */
+            <>
+              {/* Video Player or Scheduled Live Waiting Screen */}
+              {isCurrentUpcoming ? (
                 <div style={{
                   position: 'relative', minHeight: 400,
                   background: isDarkMode ? 'radial-gradient(ellipse at top, #1e1b4b, #0f172a)' : 'radial-gradient(ellipse at top, #fffbeb, #fef3c7)',
@@ -843,138 +1249,93 @@ export default function ChapterPlayerScreen() {
                     <span>Live standby active • Auto-refreshing in realtime</span>
                   </div>
                 </div>
-              );
-            }
-
-            return (
-              <div style={{
-                position: 'relative',
-                background: '#000',
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '100%',
-                height: sidebarCollapsed
-                  ? (infoCollapsed || !hasDetails ? 'calc(100vh - 64px - 62px)' : 'calc(100vh - 64px - 140px)')
-                  : (infoCollapsed || !hasDetails ? 'calc(100vh - 64px - 62px)' : 'calc(100vh - 64px - 180px)'),
-                minHeight: 280,
-                maxHeight: sidebarCollapsed && (infoCollapsed || !hasDetails) ? 'calc(100vh - 64px - 62px)' : '75vh',
-                transition: 'height 0.2s ease',
-                overflow: 'hidden'
-              }}>
-                <VideoPlayer
-                  key={`${currentChapter?.id || 'ch'}_${currentLessonId || 'main'}_${activeVideoUrl}`}
-                  url={activeVideoUrl}
-                  title={currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title : currentChapter?.title}
-                  videoKey={`${user?.id || 'guest'}_${courseId}_${currentChapter?.id || ''}${currentLessonId ? `_${currentLessonId}` : ''}`}
-                  isDarkMode={isDarkMode}
-                  onEnded={() => {
-                    if (user && hasAccess && !isCompleted) {
-                      handleMarkComplete();
-                    }
-                  }}
-                  hasPrev={!!prevItem}
-                  hasNext={!!nextItem}
-                  onPrev={() => prevItem && navigateToItem(prevItem)}
-                  onNext={() => nextItem && navigateToItem(nextItem)}
-                  isCompleted={isCompleted}
-                  onMarkComplete={hasAccess ? handleMarkComplete : undefined}
-                  onUnmarkComplete={hasAccess ? handleUnmarkComplete : undefined}
-                />
-              </div>
-            );
-          })()}
-
-          {/* Chapter info panel */}
-          {infoCollapsed ? (
-            <div style={{
-              minHeight: 62,
-              height: 62,
-              padding: '0 24px',
-              background: cardBg,
-              borderBottom: `1px solid ${border}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 16,
-              flexShrink: 0,
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8,
-                  color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 6, flexShrink: 0
+              ) : (
+                <div style={{
+                  position: 'relative',
+                  background: '#000',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  height: sidebarCollapsed
+                    ? (infoCollapsed || !hasDetails ? 'calc(100vh - 64px - 62px)' : 'calc(100vh - 64px - 140px)')
+                    : (infoCollapsed || !hasDetails ? 'calc(100vh - 64px - 62px)' : 'calc(100vh - 64px - 180px)'),
+                  minHeight: 280,
+                  maxHeight: sidebarCollapsed && (infoCollapsed || !hasDetails) ? 'calc(100vh - 64px - 62px)' : '75vh',
+                  transition: 'height 0.2s ease',
+                  overflow: 'hidden'
                 }}>
-                  {currentLessonId ? 'LESSON' : 'CHAPTER'}
-                </span>
-                {isChapterLive(currentChapter) && (
-                  <LiveViewerBadge isDarkMode={isDarkMode} size="sm" />
-                )}
-                {isChapterUpcoming(currentChapter) && (
-                  <LiveCountdown
-                    targetDate={currentChapter?.live_starts_at}
-                    variant="badge"
+                  <VideoPlayer
+                    key={`${currentChapter?.id || 'ch'}_${currentLessonId || 'main'}`}
+                    url={activeVideoUrl}
+                    title={currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title : currentChapter?.title}
+                    videoKey={`${user?.id || 'guest'}_${courseId}_${currentChapter?.id || ''}${currentLessonId ? `_${currentLessonId}` : ''}`}
                     isDarkMode={isDarkMode}
-                    onTimeReached={refreshCourseChapters}
-                  />
-                )}
-                {isCompleted && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700,
-                    color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: 6,
-                    display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0
-                  }}>
-                    <CheckCircle2 size={10} /> Completed
-                  </span>
-                )}
-                <h2 style={{
-                  fontSize: 15, fontWeight: 700, color: textPrimary, margin: 0,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                }}>
-                  {currentLessonId 
-                    ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title || 'Lesson'
-                    : currentChapter?.title}
-                </h2>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-                <span style={{ fontSize: 12, color: textMuted, fontWeight: 600 }}>
-                  {completedCount}/{totalCount} ({overallProgress}%)
-                </span>
-                {hasDetails && (
-                  <button
-                    onClick={() => setInfoCollapsed(false)}
-                    style={{
-                      padding: '6px 12px', borderRadius: 8,
-                      border: `1px solid ${border}`,
-                      background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                      color: textPrimary, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
-                      transition: 'all 0.15s'
+                    onEnded={() => {
+                      if (user && hasAccess && !isCompleted) {
+                        handleMarkComplete();
+                      }
                     }}
-                    title="Show Details & Resources"
-                  >
-                    <span>Show Details</span>
-                    <ChevronDown size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div style={{ padding: '20px 28px', background: cardBg, borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
-              {/* Chapter title + badge + section collapse toggle */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                    hasPrev={!!prevItem}
+                    hasNext={!!nextItem}
+                    onPrev={() => prevItem && navigateToItem(prevItem)}
+                    onNext={() => nextItem && navigateToItem(nextItem)}
+                    isCompleted={isCompleted}
+                    onMarkComplete={hasAccess ? handleMarkComplete : undefined}
+                    onUnmarkComplete={hasAccess ? handleUnmarkComplete : undefined}
+                  />
+                </div>
+              )}
+
+              {/* Chapter info panel */}
+              {infoCollapsed ? (
+                <div style={{
+                  minHeight: 62,
+                  height: 62,
+                  padding: '0 24px',
+                  background: cardBg,
+                  borderBottom: `1px solid ${border}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  flexShrink: 0,
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
+                    {sidebarCollapsed && (
+                      <button
+                        onClick={() => setSidebarCollapsed(false)}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: 8,
+                          border: `1.5px solid ${isDarkMode ? 'rgba(99,102,241,0.5)' : '#6366f1'}`,
+                          background: isDarkMode ? 'rgba(99,102,241,0.22)' : 'rgba(99,102,241,0.12)',
+                          color: isDarkMode ? '#f1f5f9' : '#4338ca',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 12,
+                          fontWeight: 800,
+                          flexShrink: 0,
+                          transition: 'all 0.15s'
+                        }}
+                        title="Open Playlist"
+                      >
+                        <PanelLeftOpen size={14} color="#6366f1" />
+                        <span>Playlist</span>
+                      </button>
+                    )}
                     <span style={{
-                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1,
-                      color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 6,
+                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8,
+                      color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 6, flexShrink: 0
                     }}>
                       {currentLessonId ? 'LESSON' : 'CHAPTER'}
                     </span>
                     {isChapterLive(currentChapter) && (
-                      <LiveViewerBadge isDarkMode={isDarkMode} size="md" />
+                      <LiveViewerBadge isDarkMode={isDarkMode} size="sm" />
                     )}
                     {isChapterUpcoming(currentChapter) && (
                       <LiveCountdown
@@ -984,210 +1345,301 @@ export default function ChapterPlayerScreen() {
                         onTimeReached={refreshCourseChapters}
                       />
                     )}
-                    {isChapterRecorded(currentChapter) && !isChapterLive(currentChapter) && !isChapterUpcoming(currentChapter) && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5,
-                        color: '#6366f1', background: 'rgba(99,102,241,0.12)', padding: '2px 8px', borderRadius: 6
-                      }}>
-                        RECORDED SESSION
-                      </span>
-                    )}
                     {isCompleted && (
                       <span style={{
-                        fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+                        fontSize: 10, fontWeight: 700,
                         color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: 6,
-                        display: 'flex', alignItems: 'center', gap: 3,
+                        display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0
                       }}>
-                        <CheckCircle2 size={10} /> Chapter Completed
+                        <CheckCircle2 size={10} /> Completed
                       </span>
                     )}
+                    <h2 style={{
+                      fontSize: 15, fontWeight: 700, color: textPrimary, margin: 0,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                    }}>
+                      {currentLessonId 
+                        ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title || 'Lesson'
+                        : currentChapter?.title}
+                    </h2>
                   </div>
-                  <h2 style={{ fontSize: 20, fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.3 }}>
-                    {currentLessonId 
-                      ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title || 'Lesson'
-                      : currentChapter?.title}
-                  </h2>
-                  {currentLessonId && (
-                    <div style={{ marginTop: 6, fontSize: 13, color: textMuted }}>
-                      From chapter: <strong style={{ color: textPrimary }}>{currentChapter?.title}</strong>
-                    </div>
-                  )}
-                </div>
 
-                {/* Toggle Collapse Details */}
-                <button
-                  onClick={() => setInfoCollapsed(true)}
-                  style={{
-                    padding: '6px 12px', borderRadius: 8,
-                    border: `1px solid ${border}`,
-                    background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                    color: textMuted, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
-                    flexShrink: 0
-                  }}
-                  title="Hide Details"
-                >
-                  <span>Hide Details</span>
-                  <ChevronUp size={14} />
-                </button>
-              </div>
-
-              {/* Progress bar */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, color: textMuted }}>{completedCount}/{totalCount} lessons completed</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
-                </div>
-                <div style={{ height: 5, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99 }}>
-                  <div style={{
-                    height: '100%', width: `${overallProgress}%`,
-                    background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
-                    borderRadius: 99, transition: 'width 0.4s ease',
-                  }} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Collapsible Tabbed Details Section: About Lesson | About Course | Resources */}
-          {!infoCollapsed && (
-            <div style={{ background: bg, flex: 1 }}>
-              {/* Tab Navigation */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '12px 32px',
-                borderBottom: `1px solid ${border}`,
-                background: isDarkMode ? 'rgba(15,23,42,0.4)' : 'rgba(255,255,255,0.4)',
-                overflowX: 'auto'
-              }}>
-                <button
-                  onClick={() => setInfoTab('lesson')}
-                  style={{
-                    padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                    fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
-                    background: infoTab === 'lesson' ? '#6366f1' : 'transparent',
-                    color: infoTab === 'lesson' ? '#ffffff' : textMuted,
-                    transition: 'all 0.15s'
-                  }}
-                >
-                  <BookOpen size={14} />
-                  <span>About Lesson</span>
-                </button>
-
-                <button
-                  onClick={() => setInfoTab('course')}
-                  style={{
-                    padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                    fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
-                    background: infoTab === 'course' ? '#6366f1' : 'transparent',
-                    color: infoTab === 'course' ? '#ffffff' : textMuted,
-                    transition: 'all 0.15s'
-                  }}
-                >
-                  <Layers size={14} />
-                  <span>About Course</span>
-                </button>
-
-                {currentChapter?.attachments && currentChapter.attachments.length > 0 && (
-                  <button
-                    onClick={() => setInfoTab('resources')}
-                    style={{
-                      padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                      fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
-                      background: infoTab === 'resources' ? '#6366f1' : 'transparent',
-                      color: infoTab === 'resources' ? '#ffffff' : textMuted,
-                      transition: 'all 0.15s'
-                    }}
-                  >
-                    <FileText size={14} />
-                    <span>Resources ({currentChapter.attachments.length})</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Tab Content */}
-              <div style={{ padding: '24px 32px' }}>
-                {infoTab === 'lesson' && (
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>
-                      {currentLessonId ? 'Lesson Overview' : 'Chapter Overview'}
-                    </h3>
-                    <div style={{ fontSize: 14, color: textMuted, lineHeight: 1.8, margin: 0, background: cardBg, padding: '20px', borderRadius: '14px', border: `1px solid ${border}` }}>
-                      <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                        {(currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description || currentChapter?.description : currentChapter?.description) || 'No specific description provided for this lesson.'}
-                      </ReactMarkdown>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, color: textMuted, fontWeight: 600 }}>
+                      {completedCount}/{totalCount} ({overallProgress}%)
+                    </span>
+                    {hasDetails && (
+                      <button
+                        onClick={() => setInfoCollapsed(false)}
+                        style={{
+                          padding: '6px 12px', borderRadius: 8,
+                          border: `1px solid ${border}`,
+                          background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                          color: textPrimary, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
+                          transition: 'all 0.15s'
+                        }}
+                        title="Show Details & Resources"
+                      >
+                        <span>Show Details</span>
+                        <ChevronDown size={14} />
+                      </button>
+                    )}
                   </div>
-                )}
-
-                {infoTab === 'course' && (
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>
-                      {courseTitle || 'Course Overview'}
-                    </h3>
-                    <div style={{ fontSize: 14, color: textMuted, lineHeight: 1.8, margin: 0, background: cardBg, padding: '20px', borderRadius: '14px', border: `1px solid ${border}` }}>
-                      <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                        {currentCourse?.description || 'Comprehensive course content and learning materials provided by the instructor.'}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                )}
-
-                {infoTab === 'resources' && currentChapter?.attachments && (
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 14px' }}>
-                      Lesson Resources & Downloads
-                    </h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {currentChapter.attachments.map((att: any) => {
-                        const isAssignment = att.title?.toLowerCase().includes('assignment') || att.name?.toLowerCase().includes('assignment');
-                        return (
-                          <div
-                            key={att.id}
+                </div>
+              ) : (
+                <div style={{ padding: '20px 28px', background: cardBg, borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
+                  {/* Chapter title + badge + section collapse toggle */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                        {sidebarCollapsed && (
+                          <button
+                            onClick={() => setSidebarCollapsed(false)}
                             style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '14px 18px', borderRadius: 14, border: `1px solid ${border}`,
-                              background: cardBg
+                              padding: '4px 10px',
+                              borderRadius: 8,
+                              border: `1.5px solid ${isDarkMode ? 'rgba(99,102,241,0.5)' : '#6366f1'}`,
+                              background: isDarkMode ? 'rgba(99,102,241,0.22)' : 'rgba(99,102,241,0.12)',
+                              color: isDarkMode ? '#f1f5f9' : '#4338ca',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              fontSize: 11,
+                              fontWeight: 800,
+                              flexShrink: 0,
+                              transition: 'all 0.15s'
                             }}
+                            title="Open Playlist"
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <FileText size={18} color="#6366f1" />
-                              </div>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: textPrimary }}>{att.title}</span>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button
-                                onClick={() => navigate('/attachmentviewer', { state: { url: att.file_url, title: att.title, type: att.file_type } })}
+                            <PanelLeftOpen size={13} color="#6366f1" />
+                            <span>Playlist</span>
+                          </button>
+                        )}
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1,
+                          color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 6,
+                        }}>
+                          {currentLessonId ? 'LESSON' : 'CHAPTER'}
+                        </span>
+                        {isChapterLive(currentChapter) && (
+                          <LiveViewerBadge isDarkMode={isDarkMode} size="md" />
+                        )}
+                        {isChapterUpcoming(currentChapter) && (
+                          <LiveCountdown
+                            targetDate={currentChapter?.live_starts_at}
+                            variant="badge"
+                            isDarkMode={isDarkMode}
+                            onTimeReached={refreshCourseChapters}
+                          />
+                        )}
+                        {isChapterRecorded(currentChapter) && !isChapterLive(currentChapter) && !isChapterUpcoming(currentChapter) && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5,
+                            color: '#6366f1', background: 'rgba(99,102,241,0.12)', padding: '2px 8px', borderRadius: 6
+                          }}>
+                            RECORDED SESSION
+                          </span>
+                        )}
+                        {isCompleted && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+                            color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: 6,
+                            display: 'flex', alignItems: 'center', gap: 3,
+                          }}>
+                            <CheckCircle2 size={10} /> Chapter Completed
+                          </span>
+                        )}
+                      </div>
+                      <h2 style={{ fontSize: 20, fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.3 }}>
+                        {currentLessonId 
+                          ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.title || 'Lesson'
+                          : currentChapter?.title}
+                      </h2>
+                      {currentLessonId && (
+                        <div style={{ marginTop: 6, fontSize: 13, color: textMuted }}>
+                          From chapter: <strong style={{ color: textPrimary }}>{currentChapter?.title}</strong>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Toggle Collapse Details */}
+                    <button
+                      onClick={() => setInfoCollapsed(true)}
+                      style={{
+                        padding: '6px 12px', borderRadius: 8,
+                        border: `1px solid ${border}`,
+                        background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                        color: textMuted, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
+                        flexShrink: 0
+                      }}
+                      title="Hide Details"
+                    >
+                      <span>Hide Details</span>
+                      <ChevronUp size={14} />
+                    </button>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, color: textMuted }}>{completedCount}/{totalCount} lessons completed</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1' }}>{overallProgress}%</span>
+                    </div>
+                    <div style={{ height: 5, background: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 99 }}>
+                      <div style={{
+                        height: '100%', width: `${overallProgress}%`,
+                        background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                        borderRadius: 99, transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Collapsible Tabbed Details Section: About Lesson | About Course | Resources */}
+              {!infoCollapsed && (
+                <div style={{ background: bg, flex: 1 }}>
+                  {/* Tab Navigation */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '12px 32px',
+                    borderBottom: `1px solid ${border}`,
+                    background: isDarkMode ? 'rgba(15,23,42,0.4)' : 'rgba(255,255,255,0.4)',
+                    overflowX: 'auto'
+                  }}>
+                    <button
+                      onClick={() => setInfoTab('lesson')}
+                      style={{
+                        padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                        fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
+                        background: infoTab === 'lesson' ? '#6366f1' : 'transparent',
+                        color: infoTab === 'lesson' ? '#ffffff' : textMuted,
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      <BookOpen size={14} />
+                      <span>About Lesson</span>
+                    </button>
+
+                    <button
+                      onClick={() => setInfoTab('course')}
+                      style={{
+                        padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                        fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
+                        background: infoTab === 'course' ? '#6366f1' : 'transparent',
+                        color: infoTab === 'course' ? '#ffffff' : textMuted,
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      <Layers size={14} />
+                      <span>About Course</span>
+                    </button>
+
+                    {currentChapter?.attachments && currentChapter.attachments.length > 0 && (
+                      <button
+                        onClick={() => setInfoTab('resources')}
+                        style={{
+                          padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                          fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
+                          background: infoTab === 'resources' ? '#6366f1' : 'transparent',
+                          color: infoTab === 'resources' ? '#ffffff' : textMuted,
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        <FileText size={14} />
+                        <span>Resources ({currentChapter.attachments.length})</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tab Content */}
+                  <div style={{ padding: '24px 32px' }}>
+                    {infoTab === 'lesson' && (
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>
+                          {currentLessonId ? 'Lesson Overview' : 'Chapter Overview'}
+                        </h3>
+                        <div style={{ fontSize: 14, color: textMuted, lineHeight: 1.8, margin: 0, background: cardBg, padding: '20px', borderRadius: '14px', border: `1px solid ${border}` }}>
+                          <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                            {(currentLessonId ? playableItems.find(i => i.type === 'lesson' && i.lesson.id === currentLessonId)?.lesson?.description || currentChapter?.description : currentChapter?.description) || 'No specific description provided for this lesson.'}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {infoTab === 'course' && (
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 12px' }}>
+                          {courseTitle || 'Course Overview'}
+                        </h3>
+                        <div style={{ fontSize: 14, color: textMuted, lineHeight: 1.8, margin: 0, background: cardBg, padding: '20px', borderRadius: '14px', border: `1px solid ${border}` }}>
+                          <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                            {currentCourse?.description || 'Comprehensive course content and learning materials provided by the instructor.'}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {infoTab === 'resources' && currentChapter?.attachments && (
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 14px' }}>
+                          Lesson Resources & Downloads
+                        </h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {currentChapter.attachments.map((att: any) => {
+                            const isAssignment = att.title?.toLowerCase().includes('assignment') || att.name?.toLowerCase().includes('assignment');
+                            return (
+                              <div
+                                key={att.id}
                                 style={{
-                                  padding: '7px 16px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                                  background: '#6366f1', color: '#fff', fontSize: 12, fontWeight: 700
+                                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                  padding: '14px 18px', borderRadius: 14, border: `1px solid ${border}`,
+                                  background: cardBg
                                 }}
                               >
-                                View
-                              </button>
-                              {isAssignment && (
-                                <button
-                                  onClick={() => window.open(att.file_url, '_blank')}
-                                  style={{
-                                    padding: '7px 16px', borderRadius: 9, border: `1px solid #6366f1`, cursor: 'pointer',
-                                    background: 'transparent', color: '#6366f1', fontSize: 12, fontWeight: 700,
-                                    display: 'flex', alignItems: 'center', gap: 4
-                                  }}
-                                >
-                                  <Download size={13} />
-                                  Download
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <FileText size={18} color="#6366f1" />
+                                  </div>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: textPrimary }}>{att.title}</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button
+                                    onClick={() => navigate('/attachmentviewer', { state: { url: att.file_url, title: att.title, type: att.file_type } })}
+                                    style={{
+                                      padding: '7px 16px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                                      background: '#6366f1', color: '#fff', fontSize: 12, fontWeight: 700
+                                    }}
+                                  >
+                                    View
+                                  </button>
+                                  {isAssignment && (
+                                    <button
+                                      onClick={() => window.open(att.file_url, '_blank')}
+                                      style={{
+                                        padding: '7px 16px', borderRadius: 9, border: `1px solid #6366f1`, cursor: 'pointer',
+                                        background: 'transparent', color: '#6366f1', fontSize: 12, fontWeight: 700,
+                                        display: 'flex', alignItems: 'center', gap: 4
+                                      }}
+                                    >
+                                      <Download size={13} />
+                                      Download
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              )}
+            </>
           )}
 
         </div>
@@ -1195,6 +1647,23 @@ export default function ChapterPlayerScreen() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .edu-quiz-card {
+          transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease;
+        }
+        .edu-quiz-card:hover {
+          transform: translateY(-3px);
+          border-color: rgba(99, 102, 241, 0.5) !important;
+          box-shadow: 0 12px 28px rgba(99, 102, 241, 0.16) !important;
+        }
+        .edu-btn-glow {
+          transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+        }
+        .edu-btn-glow:hover {
+          transform: translateY(-1px);
+          filter: brightness(1.08);
+          box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35) !important;
+        }
       `}</style>
     </div>
   );
