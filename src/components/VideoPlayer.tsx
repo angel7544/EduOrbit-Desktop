@@ -91,13 +91,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const isM3U8 = useMemo(() => normalizedUrl?.toLowerCase().includes('.m3u8'), [normalizedUrl]);
 
   // Compute playable stream URL:
-  // - Cloudflare R2, Bunny CDN, and Supabase stream DIRECTLY to browser (0 serverless calls, 100% free)
-  // - Third-party domains that block CORS (like hranker.com) use the proxy
+  // - Cloudflare R2, Bunny CDN, and Supabase stream 100% DIRECTLY to browser (0 serverless calls, 0 bandwidth cost)
+  // - Third-party domains that block CORS (like hranker.com) use the free Cloudflare Worker Edge Proxy
   const playableStreamUrl = useMemo(() => {
     if (!normalizedUrl || youtubeId) return normalizedUrl;
-    if (normalizedUrl.startsWith('/api/') || normalizedUrl.includes('localhost') || normalizedUrl.includes('127.0.0.1')) {
-      return normalizedUrl;
-    }
+    
+    // Direct CDN streaming for R2, Bunny, Supabase (0 serverless usage)
     if (
       normalizedUrl.includes('cdn.br31tech.in') ||
       normalizedUrl.includes('b-cdn.net') ||
@@ -105,9 +104,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     ) {
       return normalizedUrl;
     }
+
+    // Third-party CORS-blocked domains use the free Cloudflare Worker
     if (normalizedUrl.includes('hranker.com')) {
-      return `/api/stream-proxy?url=${encodeURIComponent(normalizedUrl)}`;
+      return `https://proxy.br31tech.in/?url=${encodeURIComponent(normalizedUrl)}`;
     }
+
     return normalizedUrl;
   }, [normalizedUrl, youtubeId]);
 
@@ -471,8 +473,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             return;
           }
 
-          // If direct stream failed due to CORS/network, attempt proxy fallback
-          const proxyFallback = `/api/stream-proxy?url=${encodeURIComponent(normalizedUrl)}`;
+          // If direct stream failed due to CORS/network, attempt Cloudflare Worker proxy fallback
+          const proxyFallback = `https://proxy.br31tech.in/?url=${encodeURIComponent(normalizedUrl)}`;
           if (playableStreamUrl === normalizedUrl && !hasSwitchedToFallback) {
             hasSwitchedToFallback = true;
             console.log('Direct stream failed, attempting proxy fallback:', proxyFallback);
