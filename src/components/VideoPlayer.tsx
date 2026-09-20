@@ -90,26 +90,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const youtubeId = useMemo(() => extractYouTubeId(normalizedUrl), [normalizedUrl]);
   const isM3U8 = useMemo(() => normalizedUrl?.toLowerCase().includes('.m3u8'), [normalizedUrl]);
 
-  // Compute playable stream URL:
-  // - Cloudflare R2, Bunny CDN, and Supabase stream 100% DIRECTLY to browser (0 serverless calls, 0 bandwidth cost)
-  // - Third-party domains that block CORS (like hranker.com) use the free Cloudflare Worker Edge Proxy
+  // Playable stream URL:
+  // - Direct CDN for R2, Bunny, Supabase (0 worker calls)
+  // - Cloudflare Worker for CORS-blocked third-party domains (hranker.com)
   const playableStreamUrl = useMemo(() => {
     if (!normalizedUrl || youtubeId) return normalizedUrl;
-    
-    // Direct CDN streaming for R2, Bunny, Supabase (0 serverless usage)
-    if (
-      normalizedUrl.includes('cdn.br31tech.in') ||
-      normalizedUrl.includes('b-cdn.net') ||
-      normalizedUrl.includes('supabase.co')
-    ) {
-      return normalizedUrl;
-    }
-
-    // Third-party CORS-blocked domains use the free Cloudflare Worker
     if (normalizedUrl.includes('hranker.com')) {
       return `https://proxy.br31tech.in/?url=${encodeURIComponent(normalizedUrl)}`;
     }
-
     return normalizedUrl;
   }, [normalizedUrl, youtubeId]);
 
@@ -464,36 +452,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       hls.on(Hls.Events.ERROR, (_, data) => {
         console.warn('HLS Event Error:', data);
         if (data.fatal) {
-          // If proxy failed, automatically attempt direct source URL before giving up
-          if (playableStreamUrl !== normalizedUrl && !hasSwitchedToFallback) {
-            hasSwitchedToFallback = true;
-            console.log('Proxy stream failed, attempting direct stream playback:', normalizedUrl);
-            hls.loadSource(normalizedUrl);
-            hls.startLoad();
-            return;
-          }
-
-          // If direct stream failed due to CORS/network, attempt Cloudflare Worker proxy fallback
-          const proxyFallback = `https://proxy.br31tech.in/?url=${encodeURIComponent(normalizedUrl)}`;
-          if (playableStreamUrl === normalizedUrl && !hasSwitchedToFallback) {
-            hasSwitchedToFallback = true;
-            console.log('Direct stream failed, attempting proxy fallback:', proxyFallback);
-            hls.loadSource(proxyFallback);
-            hls.startLoad();
-            return;
-          }
-
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               if (networkRetryCount < 3) {
                 networkRetryCount++;
                 console.log(`Network error, retrying (${networkRetryCount}/3)...`);
                 hls.startLoad();
-              } else {
-                console.error('Fatal network error after 3 retries.');
-                setIsLoading(false);
-                setError('Network connection error or media stream unavailable. Please check your connection or link.');
+                return;
               }
+              console.error('Fatal network error after 3 retries.');
+              setIsLoading(false);
+              setError('Network connection error or media stream unavailable. Please check your connection.');
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               if (mediaRetryCount < 3) {
