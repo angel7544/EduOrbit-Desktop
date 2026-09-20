@@ -72,12 +72,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const { user } = useAuthStore();
 
-  // Normalize URL (upgrade http to https for external CDNs to prevent mixed-content blocks)
+  // Normalize URL (upgrade http to https, and safely encode spaces for valid HTTP/HLS requests)
   const normalizedUrl = useMemo(() => {
     if (!url) return '';
     let u = url.trim();
     if (u.startsWith('http://') && !u.includes('localhost') && !u.includes('127.0.0.1')) {
       u = u.replace('http://', 'https://');
+    }
+    try {
+      u = encodeURI(decodeURI(u));
+    } catch {
+      u = encodeURI(u);
     }
     return u;
   }, [url]);
@@ -85,17 +90,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const youtubeId = useMemo(() => extractYouTubeId(normalizedUrl), [normalizedUrl]);
   const isM3U8 = useMemo(() => normalizedUrl?.toLowerCase().includes('.m3u8'), [normalizedUrl]);
 
-  // Compute final playable stream URL (proxy external m3u8 playlists through stream-proxy to ensure 100% CORS reliability)
+  // Compute playable stream URL:
+  // - Cloudflare R2, Bunny CDN, and Supabase stream DIRECTLY to browser (0 serverless calls, 100% free)
+  // - Third-party domains that block CORS (like hranker.com) use the proxy
   const playableStreamUrl = useMemo(() => {
     if (!normalizedUrl || youtubeId) return normalizedUrl;
     if (normalizedUrl.startsWith('/api/') || normalizedUrl.includes('localhost') || normalizedUrl.includes('127.0.0.1')) {
       return normalizedUrl;
     }
-    if (isM3U8 || normalizedUrl.includes('hranker.com')) {
+    if (
+      normalizedUrl.includes('cdn.br31tech.in') ||
+      normalizedUrl.includes('b-cdn.net') ||
+      normalizedUrl.includes('supabase.co')
+    ) {
+      return normalizedUrl;
+    }
+    if (normalizedUrl.includes('hranker.com')) {
       return `/api/stream-proxy?url=${encodeURIComponent(normalizedUrl)}`;
     }
     return normalizedUrl;
-  }, [normalizedUrl, youtubeId, isM3U8]);
+  }, [normalizedUrl, youtubeId]);
 
   // Playback states
   const [isPlaying, setIsPlaying] = useState(false);
@@ -369,7 +383,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     let networkRetryCount = 0;
     let mediaRetryCount = 0;
-    let hasSwitchedToDirectFallback = false;
+    let hasSwitchedToFallback = false;
 
     // Clean up previous HLS instance
     if (hlsRef.current) {
@@ -449,10 +463,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         console.warn('HLS Event Error:', data);
         if (data.fatal) {
           // If proxy failed, automatically attempt direct source URL before giving up
-          if (playableStreamUrl !== normalizedUrl && !hasSwitchedToDirectFallback) {
-            hasSwitchedToDirectFallback = true;
-            console.log('Stream proxy failed, attempting direct stream playback:', normalizedUrl);
+          if (playableStreamUrl !== normalizedUrl && !hasSwitchedToFallback) {
+            hasSwitchedToFallback = true;
+            console.log('Proxy stream failed, attempting direct stream playback:', normalizedUrl);
             hls.loadSource(normalizedUrl);
+            hls.startLoad();
+            return;
+          }
+
+          // If direct stream failed due to CORS/network, attempt proxy fallback
+          const proxyFallback = `/api/stream-proxy?url=${encodeURIComponent(normalizedUrl)}`;
+          if (playableStreamUrl === normalizedUrl && !hasSwitchedToFallback) {
+            hasSwitchedToFallback = true;
+            console.log('Direct stream failed, attempting proxy fallback:', proxyFallback);
+            hls.loadSource(proxyFallback);
             hls.startLoad();
             return;
           }
@@ -483,9 +507,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             default:
               console.error('Fatal unrecoverable HLS error, destroying...', data);
               hls.destroy();
-              // Try direct fallback
+              // Try native browser fallback
               if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = normalizedUrl || playableStreamUrl;
+                video.src = playableStreamUrl;
                 video.load();
                 video.play().catch(() => {
                   setIsPlaying(false);

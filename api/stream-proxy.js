@@ -3,7 +3,6 @@ import https from 'https';
 import { URL } from 'url';
 
 export default function handler(req, res) {
-  // Always set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -49,7 +48,6 @@ export default function handler(req, res) {
     method: 'GET',
     headers,
   }, (proxyRes) => {
-    // Handle redirects (301, 302, 303, 307, 308)
     if (proxyRes.statusCode && proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
       const redirectUrl = proxyRes.headers.location.startsWith('http')
         ? proxyRes.headers.location
@@ -81,7 +79,6 @@ export default function handler(req, res) {
           const trimmed = line.trim();
           if (!trimmed) return line;
 
-          // Handle URI="..." in EXT-X-KEY or EXT-X-MAP
           if (trimmed.startsWith('#')) {
             if (trimmed.includes('URI="')) {
               return trimmed.replace(/URI="([^"]+)"/g, (_, uriMatch) => {
@@ -92,7 +89,6 @@ export default function handler(req, res) {
             return line;
           }
 
-          // Regular segment (.ts, .m4s) or child sub-playlist (.m3u8) URL
           const resolved = trimmed.startsWith('http') ? trimmed : new URL(trimmed, baseUrl).href;
           return `/api/stream-proxy?url=${encodeURIComponent(resolved)}`;
         }).join('\n');
@@ -102,16 +98,16 @@ export default function handler(req, res) {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
           'Access-Control-Allow-Headers': '*',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
         });
         res.end(rewritten);
       });
     } else {
-      // Forward binary media segments (ts, m4s, mp4)
       const responseHeaders = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
         'Access-Control-Allow-Headers': '*',
+        'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
       };
       if (proxyRes.headers['content-type']) responseHeaders['Content-Type'] = proxyRes.headers['content-type'];
       if (proxyRes.headers['content-length']) responseHeaders['Content-Length'] = proxyRes.headers['content-length'];

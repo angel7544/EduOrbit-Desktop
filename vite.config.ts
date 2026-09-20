@@ -45,7 +45,6 @@ function streamProxyPlugin(): Plugin {
           method: 'GET',
           headers,
         }, (proxyRes) => {
-          // Handle redirects
           if (proxyRes.statusCode && proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
             const redirectUrl = proxyRes.headers.location.startsWith('http')
               ? proxyRes.headers.location
@@ -74,7 +73,6 @@ function streamProxyPlugin(): Plugin {
                 const trimmed = line.trim();
                 if (!trimmed) return line;
 
-                // Handle URI="..." in EXT-X-KEY or EXT-X-MAP
                 if (trimmed.startsWith('#')) {
                   if (trimmed.includes('URI="')) {
                     return trimmed.replace(/URI="([^"]+)"/g, (_, uriMatch) => {
@@ -85,7 +83,6 @@ function streamProxyPlugin(): Plugin {
                   return line;
                 }
 
-                // Regular segment or sub-playlist URL
                 const resolved = trimmed.startsWith('http') ? trimmed : new URL(trimmed, baseUrl).href;
                 return `/api/stream-proxy?url=${encodeURIComponent(resolved)}`;
               }).join('\n');
@@ -100,7 +97,6 @@ function streamProxyPlugin(): Plugin {
               res.end(rewritten);
             });
           } else {
-            // Forward binary segments / mp4 / chunks
             const responseHeaders: Record<string, string | string[] | number | undefined> = {
               'Access-Control-Allow-Origin': '*',
               'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
@@ -136,4 +132,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), streamProxyPlugin()],
   envPrefix: ['VITE_', 'EXPO_PUBLIC_'],
 });
+
+
 
