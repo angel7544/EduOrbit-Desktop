@@ -369,6 +369,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     let networkRetryCount = 0;
     let mediaRetryCount = 0;
+    let hasSwitchedToDirectFallback = false;
 
     // Clean up previous HLS instance
     if (hlsRef.current) {
@@ -447,6 +448,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       hls.on(Hls.Events.ERROR, (_, data) => {
         console.warn('HLS Event Error:', data);
         if (data.fatal) {
+          // If proxy failed, automatically attempt direct source URL before giving up
+          if (playableStreamUrl !== normalizedUrl && !hasSwitchedToDirectFallback) {
+            hasSwitchedToDirectFallback = true;
+            console.log('Stream proxy failed, attempting direct stream playback:', normalizedUrl);
+            hls.loadSource(normalizedUrl);
+            hls.startLoad();
+            return;
+          }
+
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               if (networkRetryCount < 3) {
@@ -475,7 +485,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               hls.destroy();
               // Try direct fallback
               if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = playableStreamUrl;
+                video.src = normalizedUrl || playableStreamUrl;
                 video.load();
                 video.play().catch(() => {
                   setIsPlaying(false);
